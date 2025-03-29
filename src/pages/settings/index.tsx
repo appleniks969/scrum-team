@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import Link from 'next/link';
+import IntegrationSettings, { IntegrationsState } from '../../components/integrations/IntegrationSettings';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
@@ -8,10 +9,10 @@ export default function SettingsPage() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [dashboardRefreshRate, setDashboardRefreshRate] = useState('30');
   const [defaultTimeRange, setDefaultTimeRange] = useState('30');
-  const [dataIntegrations, setDataIntegrations] = useState({
-    jira: true,
-    github: true,
-    gitlab: false
+  const [dataIntegrations, setDataIntegrations] = useState<IntegrationsState>({
+    jira: { enabled: false, config: null },
+    github: { enabled: false, config: null },
+    gitlab: { enabled: false, config: null }
   });
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -290,123 +291,9 @@ export default function SettingsPage() {
                 {/* Integration Settings */}
                 {activeTab === 'integrations' && (
                   <div className="space-y-6">
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900">JIRA Integration</h3>
-                      <div className="mt-2 flex items-center justify-between">
-                        <div className="flex items-center">
-                          <button
-                            type="button"
-                            className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                              dataIntegrations.jira ? 'bg-blue-600' : 'bg-gray-200'
-                            }`}
-                            role="switch"
-                            aria-checked={dataIntegrations.jira}
-                            onClick={() => setDataIntegrations({...dataIntegrations, jira: !dataIntegrations.jira})}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
-                                dataIntegrations.jira ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                          <span className="ml-3 text-sm text-gray-500">
-                            {dataIntegrations.jira ? 'Connected' : 'Disconnected'}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                          Configure
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900">GitHub Integration</h3>
-                      <div className="mt-2 flex items-center justify-between">
-                        <div className="flex items-center">
-                          <button
-                            type="button"
-                            className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                              dataIntegrations.github ? 'bg-blue-600' : 'bg-gray-200'
-                            }`}
-                            role="switch"
-                            aria-checked={dataIntegrations.github}
-                            onClick={() => setDataIntegrations({...dataIntegrations, github: !dataIntegrations.github})}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
-                                dataIntegrations.github ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                          <span className="ml-3 text-sm text-gray-500">
-                            {dataIntegrations.github ? 'Connected' : 'Disconnected'}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                          Configure
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900">GitLab Integration</h3>
-                      <div className="mt-2 flex items-center justify-between">
-                        <div className="flex items-center">
-                          <button
-                            type="button"
-                            className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                              dataIntegrations.gitlab ? 'bg-blue-600' : 'bg-gray-200'
-                            }`}
-                            role="switch"
-                            aria-checked={dataIntegrations.gitlab}
-                            onClick={() => setDataIntegrations({...dataIntegrations, gitlab: !dataIntegrations.gitlab})}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
-                                dataIntegrations.gitlab ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                          <span className="ml-3 text-sm text-gray-500">
-                            {dataIntegrations.gitlab ? 'Connected' : 'Disconnected'}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                          Configure
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-8">
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        <svg
-                          className="-ml-1 mr-2 h-5 w-5 text-gray-500"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        Add New Integration
-                      </button>
-                    </div>
+                    <IntegrationSettings 
+                      onIntegrationsChange={setDataIntegrations}
+                    />
                   </div>
                 )}
                 

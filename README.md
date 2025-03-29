@@ -43,6 +43,8 @@ The ScrumTeam Metrics Dashboard provides an integrated view of productivity metr
    JIRA_USERNAME=your-email@example.com
    JIRA_API_TOKEN=your-api-token
    GITHUB_TOKEN=your-github-token
+   GITHUB_ORG=your-organization-name
+   USE_MOCK_DATA=false
    ```
 
 4. Start the development server:
@@ -53,6 +55,36 @@ The ScrumTeam Metrics Dashboard provides an integrated view of productivity metr
    ```
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### GitHub API Setup
+
+To enable GitHub API integration, you need to:
+
+1. **Create a GitHub Personal Access Token**:
+   - Go to your GitHub account → Settings → Developer settings → Personal access tokens → Tokens (classic)
+   - Generate a new token with the following scopes:
+     - `repo` (Full control of private repositories)
+     - `read:org` (Read organization information)
+     - `read:user` (Read user information)
+     - `user:email` (Access user email addresses)
+   - Copy the generated token
+
+2. **Configure Environment Variables**:
+   - Add the following to your `.env.local` file:
+     ```
+     GITHUB_TOKEN=your-github-personal-access-token
+     GITHUB_ORG=your-organization-name
+     ```
+   - Set `USE_MOCK_DATA=false` to use the actual GitHub API
+
+3. **Test the Connection**:
+   - Start the development server
+   - Navigate to `/api/git/test-connection` endpoint in your browser
+   - You should see a success message if the connection is working
+
+4. **Troubleshooting**:
+   - If you encounter rate limiting issues, consider increasing the cache TTL in the API endpoints
+   - Check GitHub API status at https://www.githubstatus.com/ if you experience connection issues
 
 ## Architecture
 
