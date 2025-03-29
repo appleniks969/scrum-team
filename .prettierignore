@@ -1,0 +1,12 @@
+.next
+node_modules
+build
+coverage
+public
+.vercel
+yarn.lock
+package-lock.json
+.DS_Store
+.env*
+next-env.d.ts
+README.md

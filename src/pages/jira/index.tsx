@@ -1,525 +1,388 @@
-import React, { useState } from 'react';
-import { GetServerSideProps } from 'next';
+import React, { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import MetricCard from '../../components/dashboard/MetricCard';
 import LineChart from '../../components/charts/LineChart';
 import BarChart from '../../components/charts/BarChart';
+import ProgressBar from '../../components/charts/ProgressBar';
+import DateRangePicker from '../../components/dashboard/DateRangePicker';
+import TeamSelector from '../../components/dashboard/TeamSelector';
+import LoadingState from '../../components/ui/LoadingState';
+import ErrorAlert from '../../components/ui/ErrorAlert';
+import { useTeamStats, useAllTeamsStats } from '../../hooks/useJiraData';
 
-// Mock data
-const storyPointsData = {
-  totalStoryPointsCompleted: 295,
-  totalStoryPointsPlanned: 359,
-  completionRate: 0.82,
-  velocityTrend: [
-    { sprint: "Sprint 1", velocity: 65 },
-    { sprint: "Sprint 2", velocity: 72 },
-    { sprint: "Sprint 3", velocity: 68 },
-    { sprint: "Sprint 4", velocity: 90 }
-  ],
-  teams: [
-    {
-      id: "team-alpha",
-      name: "Team Alpha",
-      sprints: [
-        {
-          id: 1001,
-          name: "Sprint 1",
-          startDate: "2023-01-01",
-          endDate: "2023-01-14",
-          storyPoints: {
-            total: 25,
-            completed: 18,
-            completionRate: 0.72
-          }
-        },
-        {
-          id: 1002,
-          name: "Sprint 2",
-          startDate: "2023-01-15",
-          endDate: "2023-01-28",
-          storyPoints: {
-            total: 30,
-            completed: 22,
-            completionRate: 0.73
-          }
-        },
-        {
-          id: 1003,
-          name: "Sprint 3",
-          startDate: "2023-01-29",
-          endDate: "2023-02-11",
-          storyPoints: {
-            total: 28,
-            completed: 20,
-            completionRate: 0.71
-          }
-        },
-        {
-          id: 1004,
-          name: "Sprint 4",
-          startDate: "2023-02-12",
-          endDate: "2023-02-25",
-          storyPoints: {
-            total: 32,
-            completed: 25,
-            completionRate: 0.78
-          }
-        }
-      ],
-      issueStatusBreakdown: [
-        { status: "To Do", count: 5, percentage: 14.3 },
-        { status: "In Progress", count: 8, percentage: 22.9 },
-        { status: "Code Review", count: 4, percentage: 11.4 },
-        { status: "Done", count: 18, percentage: 51.4 }
-      ],
-      memberPerformance: [
-        { name: "Alex Johnson", assigned: 10, completed: 5, percentage: 50 },
-        { name: "Jordan Smith", assigned: 16, completed: 8, percentage: 50 },
-        { name: "Taylor Roberts", assigned: 5, completed: 0, percentage: 0 },
-        { name: "Morgan Lee", assigned: 3, completed: 3, percentage: 100 }
-      ]
-    },
-    {
-      id: "team-beta",
-      name: "Team Beta",
-      sprints: [
-        {
-          id: 2001,
-          name: "Sprint 1",
-          startDate: "2023-01-01",
-          endDate: "2023-01-14",
-          storyPoints: {
-            total: 22,
-            completed: 16,
-            completionRate: 0.73
-          }
-        },
-        {
-          id: 2002,
-          name: "Sprint 2",
-          startDate: "2023-01-15",
-          endDate: "2023-01-28",
-          storyPoints: {
-            total: 24,
-            completed: 19,
-            completionRate: 0.79
-          }
-        },
-        {
-          id: 2003,
-          name: "Sprint 3",
-          startDate: "2023-01-29",
-          endDate: "2023-02-11",
-          storyPoints: {
-            total: 20,
-            completed: 17,
-            completionRate: 0.85
-          }
-        },
-        {
-          id: 2004,
-          name: "Sprint 4",
-          startDate: "2023-02-12",
-          endDate: "2023-02-25",
-          storyPoints: {
-            total: 24,
-            completed: 20,
-            completionRate: 0.83
-          }
-        }
-      ],
-      issueStatusBreakdown: [
-        { status: "To Do", count: 4, percentage: 13.3 },
-        { status: "In Progress", count: 6, percentage: 20.0 },
-        { status: "Code Review", count: 5, percentage: 16.7 },
-        { status: "Done", count: 15, percentage: 50.0 }
-      ],
-      memberPerformance: [
-        { name: "Riley Chen", assigned: 8, completed: 6, percentage: 75 },
-        { name: "Casey Kim", assigned: 7, completed: 4, percentage: 57.1 },
-        { name: "Avery Patel", assigned: 9, completed: 5, percentage: 55.6 }
-      ]
-    }
-  ]
-};
-
-// Get team names for filter dropdown
-const teamNames = storyPointsData.teams.map(team => team.name);
-
-interface JiraMetricsPageProps {
-  storyPoints: typeof storyPointsData;
+interface DateRange {
+  startDate: string;
+  endDate: string;
 }
 
-const JiraMetricsPage: React.FC<JiraMetricsPageProps> = ({ storyPoints }) => {
-  const [selectedTeam, setSelectedTeam] = useState('all');
-  const [selectedSprint, setSelectedSprint] = useState('latest');
+export default function JiraMetricsDashboard() {
+  // State for filters
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   
-  // Filter teams based on selection
-  const filteredTeams = selectedTeam === 'all' 
-    ? storyPoints.teams 
-    : storyPoints.teams.filter(team => team.name === selectedTeam);
-  
-  // Format team sprint data for chart
-  const sprintPerformanceData = filteredTeams.flatMap(team => 
-    team.sprints.map(sprint => ({
-      team: team.name,
-      sprint: sprint.name,
-      planned: sprint.storyPoints.total,
-      completed: sprint.storyPoints.completed,
-      completionRate: sprint.storyPoints.completionRate
-    }))
+  // Get team-specific stats if a team is selected
+  const { 
+    stats: teamStats, 
+    loading: teamStatsLoading, 
+    error: teamStatsError 
+  } = useTeamStats(
+    selectedTeamId,
+    undefined,
+    dateRange?.startDate,
+    dateRange?.endDate
   );
   
-  // Group by sprint for multi-team comparison
-  const sprintComparisonData = selectedTeam === 'all' 
-    ? storyPoints.teams.map(team => {
-        // Get latest sprint for each team
-        const latestSprint = team.sprints[team.sprints.length - 1];
-        return {
-          name: team.name,
-          planned: latestSprint.storyPoints.total,
-          completed: latestSprint.storyPoints.completed,
-          completionRate: latestSprint.storyPoints.completionRate * 100 // Convert to percentage
-        };
-      })
-    : filteredTeams.flatMap(team => 
-        team.sprints.map(sprint => ({
-          name: sprint.name,
-          planned: sprint.storyPoints.total,
-          completed: sprint.storyPoints.completed,
-          completionRate: sprint.storyPoints.completionRate * 100 // Convert to percentage
-        }))
-      );
-  
-  // Get issue status data
-  const issueStatusData = filteredTeams.flatMap(team => team.issueStatusBreakdown);
-  const combinedStatusData = issueStatusData.reduce((acc, status) => {
-    const existingStatus = acc.find(s => s.status === status.status);
-    if (existingStatus) {
-      existingStatus.count += status.count;
-    } else {
-      acc.push({ ...status });
+  // Get all teams stats
+  const { 
+    stats: allTeamsStats, 
+    loading: allTeamsLoading, 
+    error: allTeamsError 
+  } = useAllTeamsStats(
+    dateRange?.startDate,
+    dateRange?.endDate
+  );
+
+  // Set default date range on first load
+  useEffect(() => {
+    if (!dateRange) {
+      // Default to last 30 days
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      
+      setDateRange({
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0]
+      });
     }
-    return acc;
-  }, [] as typeof issueStatusData);
+  }, [dateRange]);
+
+  // Prepare sprint performance data for chart
+  const prepareSprintPerformanceData = () => {
+    if (!allTeamsStats) return [];
+    
+    // In a real app, we would process the data from the API
+    // For now, use mock data that simulates sprint data
+    return [
+      { sprint: 'Sprint 22', planned: 120, completed: 92, completion: 76.7 },
+      { sprint: 'Sprint 23', planned: 108, completed: 90, completion: 83.3 },
+      { sprint: 'Sprint 24', planned: 135, completed: 112, completion: 83.0 },
+      { sprint: 'Sprint 25', planned: 140, completed: 121, completion: 86.4 },
+      { sprint: 'Sprint 26', planned: 125, completed: 114, completion: 91.2 },
+      { sprint: 'Sprint 27', planned: 148, completed: 132, completion: 89.2 }
+    ];
+  };
+
+  // Prepare team completion data for chart
+  const prepareTeamCompletionData = () => {
+    if (!allTeamsStats) return [];
+    
+    return allTeamsStats.map(teamStat => ({
+      name: teamStat.teamName,
+      planned: teamStat.totalStoryPoints,
+      completed: teamStat.completedStoryPoints,
+      completion: teamStat.completionPercentage
+    }));
+  };
+
+  // Prepare story point status breakdown data
+  const prepareStatusBreakdownData = () => {
+    if (!teamStats) return [];
+    
+    // In a real app, this would come from the API
+    // For now, use mock data
+    return [
+      { status: 'Done', points: teamStats.completedStoryPoints, color: '#10B981' },
+      { status: 'In Progress', points: Math.floor(teamStats.totalStoryPoints * 0.15), color: '#3B82F6' },
+      { status: 'To Do', points: teamStats.totalStoryPoints - teamStats.completedStoryPoints - Math.floor(teamStats.totalStoryPoints * 0.15), color: '#6B7280' }
+    ];
+  };
+
+  // Prepare estimation accuracy data
+  const prepareEstimationAccuracyData = () => {
+    if (!allTeamsStats) return [];
+    
+    // In a real app, this would be calculated from historical sprint data
+    // For now, use mock data
+    return [
+      { name: 'Team Alpha', accuracy: 92, overEstimation: 3, underEstimation: 5 },
+      { name: 'Team Beta', accuracy: 85, overEstimation: 10, underEstimation: 5 },
+      { name: 'Team Gamma', accuracy: 76, overEstimation: 6, underEstimation: 18 },
+      { name: 'Team Delta', accuracy: 81, overEstimation: 12, underEstimation: 7 },
+      { name: 'Team Epsilon', accuracy: 89, overEstimation: 8, underEstimation: 3 }
+    ];
+  };
+
+  // Prepare data for charts
+  const sprintPerformanceData = prepareSprintPerformanceData();
+  const teamCompletionData = prepareTeamCompletionData();
+  const statusBreakdownData = prepareStatusBreakdownData();
+  const estimationAccuracyData = prepareEstimationAccuracyData();
+
+  // Calculate aggregate stats from all teams
+  const calculateAggregateStats = () => {
+    if (!allTeamsStats || allTeamsStats.length === 0) return {
+      totalPlanned: 0,
+      totalCompleted: 0,
+      averageCompletion: 0
+    };
+    
+    const totalPlanned = allTeamsStats.reduce((sum, team) => sum + team.totalStoryPoints, 0);
+    const totalCompleted = allTeamsStats.reduce((sum, team) => sum + team.completedStoryPoints, 0);
+    const averageCompletion = totalPlanned > 0 ? (totalCompleted / totalPlanned) * 100 : 0;
+    
+    return {
+      totalPlanned,
+      totalCompleted,
+      averageCompletion
+    };
+  };
   
-  // Calculate total count for percentage recalculation
-  const totalIssues = combinedStatusData.reduce((sum, status) => sum + status.count, 0);
-  combinedStatusData.forEach(status => {
-    status.percentage = (status.count / totalIssues) * 100;
-  });
-  
-  // Member performance data
-  const memberPerformanceData = filteredTeams.flatMap(team => team.memberPerformance);
+  const aggregateStats = calculateAggregateStats();
+
+  // Render loading or error states
+  if (allTeamsLoading && !allTeamsStats) {
+    return (
+      <Layout title="JIRA Metrics">
+        <LoadingState height={500} message="Loading JIRA metrics..." />
+      </Layout>
+    );
+  }
+
+  if (allTeamsError) {
+    return (
+      <Layout title="JIRA Metrics">
+        <ErrorAlert 
+          message="Failed to load JIRA metrics" 
+          details="There was an error fetching the data. Please try again later."
+        />
+      </Layout>
+    );
+  }
 
   return (
-    <Layout title="JIRA Metrics | Development Metrics Dashboard">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">JIRA Story Points Metrics</h1>
-        <p className="text-gray-600">
-          Analysis of story point completion and sprint performance across teams.
-        </p>
-      </div>
-
+    <Layout title="JIRA Metrics">
       {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label htmlFor="team" className="block text-sm font-medium text-gray-700 mb-1">
-              Filter by Team
-            </label>
-            <select
-              id="team"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              value={selectedTeam}
-              onChange={(e) => setSelectedTeam(e.target.value)}
-            >
-              <option value="all">All Teams</option>
-              {teamNames.map((team) => (
-                <option key={team} value={team}>{team}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="sprint" className="block text-sm font-medium text-gray-700 mb-1">
-              Sprint
-            </label>
-            <select
-              id="sprint"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              value={selectedSprint}
-              onChange={(e) => setSelectedSprint(e.target.value)}
-            >
-              <option value="latest">Latest Sprint</option>
-              <option value="all">All Sprints</option>
-              <option value="sprint1">Sprint 1</option>
-              <option value="sprint2">Sprint 2</option>
-              <option value="sprint3">Sprint 3</option>
-              <option value="sprint4">Sprint 4</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="dateRange" className="block text-sm font-medium text-gray-700 mb-1">
-              Date Range
-            </label>
-            <select
-              id="dateRange"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              defaultValue="month"
-            >
-              <option value="week">Last 7 Days</option>
-              <option value="month">Last 30 Days</option>
-              <option value="quarter">Last 90 Days</option>
-              <option value="year">Last 365 Days</option>
-            </select>
-          </div>
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 space-y-4 md:space-y-0 md:space-x-4">
+        <h1 className="text-2xl font-bold">JIRA Metrics Dashboard</h1>
+        
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+          <TeamSelector
+            selectedTeamId={selectedTeamId || undefined}
+            onTeamSelect={setSelectedTeamId}
+          />
         </div>
       </div>
-
+      
+      <DateRangePicker
+        onChange={setDateRange}
+        className="mb-6"
+      />
+      
       {/* High-level metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <MetricCard 
-          title="Planned Story Points" 
-          value={storyPoints.totalStoryPointsPlanned} 
+          title="Total Story Points Planned" 
+          value={aggregateStats.totalPlanned} 
           icon={
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
-              className="h-6 w-6" 
+              className="h-5 w-5" 
               viewBox="0 0 24 24" 
               fill="none" 
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <path d="M16 13H8" />
+              <path d="M16 17H8" />
+              <path d="M10 9H8" />
             </svg>
           } 
           color="blue"
+          loading={allTeamsLoading}
         />
         
         <MetricCard 
-          title="Completed Story Points" 
-          value={storyPoints.totalStoryPointsCompleted} 
+          title="Total Story Points Completed" 
+          value={aggregateStats.totalCompleted} 
           icon={
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
-              className="h-6 w-6" 
+              className="h-5 w-5" 
               viewBox="0 0 24 24" 
               fill="none" 
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
           } 
           color="green"
+          loading={allTeamsLoading}
         />
         
         <MetricCard 
-          title="Completion Rate" 
-          value={`${(storyPoints.completionRate * 100).toFixed(1)}%`} 
+          title="Average Completion Rate" 
+          value={`${aggregateStats.averageCompletion.toFixed(1)}%`} 
           icon={
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
-              className="h-6 w-6" 
+              className="h-5 w-5" 
               viewBox="0 0 24 24" 
               fill="none" 
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <path d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path d="M18 20V10" />
+              <path d="M12 20V4" />
+              <path d="M6 20v-6" />
             </svg>
           } 
           color="purple"
-        />
-        
-        <MetricCard 
-          title="Teams" 
-          value={storyPoints.teams.length} 
-          icon={
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-6 w-6" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          } 
-          color="indigo"
+          loading={allTeamsLoading}
         />
       </div>
-
-      {/* Velocity Trend */}
+      
+      {/* Sprint Performance Over Time */}
       <div className="mb-6">
         <LineChart 
-          data={storyPoints.velocityTrend} 
+          data={sprintPerformanceData} 
           xAxisKey="sprint" 
           lines={[
-            { key: 'velocity', name: 'Velocity', color: '#3b82f6' }
+            { key: 'planned', name: 'Planned Points', color: '#6B7280' },
+            { key: 'completed', name: 'Completed Points', color: '#10B981' },
+            { key: 'completion', name: 'Completion %', color: '#3B82F6' }
           ]}
-          title="Velocity Trend Across Sprints"
+          title="Sprint Performance Over Time"
           height={300}
         />
       </div>
-
-      {/* Team Performance Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div>
-          <BarChart 
-            data={sprintComparisonData} 
-            xAxisKey="name" 
-            bars={[
-              { key: 'planned', name: 'Planned', color: '#3b82f6' },
-              { key: 'completed', name: 'Completed', color: '#10b981' }
-            ]}
-            title={selectedTeam === 'all' ? "Team Comparison (Latest Sprint)" : "Sprint Performance"}
-            height={300}
-          />
-        </div>
-        <div>
-          <BarChart 
-            data={sprintComparisonData} 
-            xAxisKey="name" 
-            bars={[
-              { key: 'completionRate', name: 'Completion Rate (%)', color: '#8b5cf6' }
-            ]}
-            title={selectedTeam === 'all' ? "Completion Rate by Team" : "Completion Rate by Sprint"}
-            height={300}
-          />
-        </div>
+      
+      {/* Team Completion Comparison */}
+      <div className="mb-6">
+        <BarChart 
+          data={teamCompletionData} 
+          xAxisKey="name" 
+          bars={[
+            { key: 'planned', name: 'Planned Points', color: '#6B7280' },
+            { key: 'completed', name: 'Completed Points', color: '#10B981' }
+          ]}
+          title="Team Story Point Completion"
+          height={300}
+        />
       </div>
-
-      {/* Issue Status Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      
+      {/* Two-column layout for bottom charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        {/* Story Point Status Breakdown */}
         <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-lg font-medium mb-4">Issue Status Breakdown</h3>
-          <div className="relative pt-1">
-            <div className="flex h-6 overflow-hidden text-xs bg-gray-200 rounded">
-              {combinedStatusData.map((status, index) => (
-                <div
-                  key={status.status}
-                  className={`flex flex-col justify-center text-center text-white ${
-                    status.status === 'Done' 
-                      ? 'bg-green-500' 
-                      : status.status === 'In Progress' 
-                        ? 'bg-blue-500' 
-                        : status.status === 'Code Review' 
-                          ? 'bg-purple-500' 
-                          : 'bg-gray-500'
-                  }`}
-                  style={{ width: `${status.percentage}%` }}
-                >
-                  {status.percentage > 10 && `${status.status} (${status.percentage.toFixed(1)}%)`}
+          <h3 className="text-lg font-medium mb-4 text-gray-900">Story Point Status Breakdown</h3>
+          
+          {selectedTeamId ? (
+            teamStatsLoading ? (
+              <LoadingState height={200} type="skeleton" />
+            ) : (
+              <>
+                {statusBreakdownData.map((status) => (
+                  <div key={status.status} className="mb-4">
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center">
+                        <div 
+                          className="w-3 h-3 rounded-full mr-2" 
+                          style={{ backgroundColor: status.color }}
+                        />
+                        <span className="text-sm font-medium text-gray-700">{status.status}</span>
+                      </div>
+                      <span className="text-sm text-gray-600">{status.points} points</span>
+                    </div>
+                    <ProgressBar 
+                      value={status.points} 
+                      max={teamStats?.totalStoryPoints || 1} 
+                      showValue={false}
+                      size="md"
+                      colorScheme={
+                        status.status === 'Done' ? 'green' : 
+                        status.status === 'In Progress' ? 'blue' : 'indigo'
+                      }
+                    />
+                  </div>
+                ))}
+                
+                <div className="mt-4 p-3 bg-gray-50 rounded">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700">Total</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      {teamStats?.totalStoryPoints} points
+                    </span>
+                  </div>
                 </div>
-              ))}
+              </>
+            )
+          ) : (
+            <div className="flex items-center justify-center h-40 bg-gray-50 rounded text-gray-500">
+              Select a team to view status breakdown
             </div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {combinedStatusData.map((status) => (
-              <div key={status.status} className="flex items-center text-sm">
-                <div className={`w-3 h-3 mr-2 rounded-full ${
-                  status.status === 'Done' 
-                    ? 'bg-green-500' 
-                    : status.status === 'In Progress' 
-                      ? 'bg-blue-500' 
-                      : status.status === 'Code Review' 
-                        ? 'bg-purple-500' 
-                        : 'bg-gray-500'
-                }`}></div>
-                <span>{status.status}: {status.count} issues ({status.percentage.toFixed(1)}%)</span>
+          )}
+        </div>
+        
+        {/* Estimation Accuracy */}
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-lg font-medium mb-4 text-gray-900">Estimation Accuracy</h3>
+          
+          <div className="space-y-4">
+            {estimationAccuracyData.map((team) => (
+              <div key={team.name} className="mb-2">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm font-medium text-gray-700">{team.name}</span>
+                  <span className="text-sm text-gray-600">{team.accuracy}% accurate</span>
+                </div>
+                <div className="flex space-x-1 h-5">
+                  <div 
+                    className="bg-red-400 rounded-l" 
+                    style={{ width: `${team.underEstimation}%` }}
+                    title={`${team.underEstimation}% under-estimated`}
+                  />
+                  <div 
+                    className="bg-green-400" 
+                    style={{ width: `${team.accuracy}%` }}
+                    title={`${team.accuracy}% accurate`}
+                  />
+                  <div 
+                    className="bg-yellow-400 rounded-r" 
+                    style={{ width: `${team.overEstimation}%` }}
+                    title={`${team.overEstimation}% over-estimated`}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Under</span>
+                  <span>Accurate</span>
+                  <span>Over</span>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-lg font-medium mb-4">Issue Type Distribution</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-3xl font-bold text-blue-600 mb-2">65%</div>
-              <div className="text-sm text-gray-600">Tasks</div>
+          
+          <div className="mt-4 p-3 bg-gray-50 rounded">
+            <div className="text-sm text-gray-600">
+              <p className="font-medium mb-1">Understanding Estimation Accuracy</p>
+              <p>
+                Green shows accurate estimates (±10% of actual), 
+                yellow represents over-estimation, and 
+                red shows under-estimation.
+              </p>
             </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-3xl font-bold text-green-600 mb-2">20%</div>
-              <div className="text-sm text-gray-600">User Stories</div>
-            </div>
-            <div className="text-center p-4 bg-red-50 rounded-lg">
-              <div className="text-3xl font-bold text-red-600 mb-2">10%</div>
-              <div className="text-sm text-gray-600">Bugs</div>
-            </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-3xl font-bold text-purple-600 mb-2">5%</div>
-              <div className="text-sm text-gray-600">Epics</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Member Performance */}
-      <div className="mb-6">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-lg font-medium mb-4">Member Performance</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Member</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completion %</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {memberPerformanceData.map((member, index) => (
-                  <tr key={member.name} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{member.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.assigned} pts</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.completed} pts</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.percentage}%</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                        <div 
-                          className={`h-2.5 rounded-full ${
-                            member.percentage >= 80 
-                              ? 'bg-green-500' 
-                              : member.percentage >= 50 
-                                ? 'bg-yellow-500' 
-                                : 'bg-red-500'
-                          }`} 
-                          style={{ width: `${member.percentage}%` }}
-                        ></div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       </div>
     </Layout>
   );
-};
-
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  // In a real application, you would fetch this data from your API
-  // For now, we'll use the mock data defined above
-
-  return {
-    props: {
-      storyPoints: storyPointsData
-    }
-  };
-};
-
-export default JiraMetricsPage;
+}

@@ -1,172 +1,83 @@
-// Utility functions for data export
+// Export utility functions
 
 /**
- * Convert data to CSV format
- * @param data Array of objects to convert to CSV
- * @param headers Optional custom headers (defaults to object keys)
+ * Converts an array of objects to CSV format
+ * @param data Array of objects to convert
+ * @param columns Optional specific columns to include
  * @returns CSV string
  */
-export function convertToCSV(data: any[], headers?: string[]): string {
-  if (!data || data.length === 0) {
-    return '';
-  }
+export const convertToCSV = <T extends Record<string, any>>(
+  data: T[],
+  columns?: (keyof T)[]
+): string => {
+  if (!data || !data.length) return '';
 
-  // Use provided headers or extract from first data object
-  const csvHeaders = headers || Object.keys(data[0]);
-  
+  // Determine columns to include
+  const headers: (keyof T)[] = columns || Object.keys(data[0]) as (keyof T)[];
+
   // Create CSV header row
-  const headerRow = csvHeaders.join(',');
-  
+  const headerRow = headers.map(header => `"${String(header)}"`).join(',');
+
   // Create data rows
-  const rows = data.map(item => {
-    return csvHeaders.map(header => {
-      // Handle nested properties (e.g., "team.name")
-      const value = header.split('.').reduce((obj, key) => obj && obj[key], item);
-      
-      // Format the value for CSV
-      if (value === null || value === undefined) {
-        return '';
-      } else if (typeof value === 'string') {
-        // Escape quotes and wrap in quotes if needed
-        const escaped = value.replace(/"/g, '""');
-        return escaped.includes(',') || escaped.includes('"') || escaped.includes('\n') 
-          ? `"${escaped}"` 
-          : escaped;
-      } else if (typeof value === 'object') {
-        // Stringify objects/arrays and escape
-        const escaped = JSON.stringify(value).replace(/"/g, '""');
-        return `"${escaped}"`;
-      }
-      return String(value);
-    }).join(',');
+  const rows = data.map(row => {
+    return headers
+      .map(header => {
+        const value = row[header];
+        
+        // Handle different data types
+        if (value === null || value === undefined) return '""';
+        if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
+        if (typeof value === 'object') return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
+        return `"${value}"`;
+      })
+      .join(',');
   });
-  
-  // Combine header and data rows
+
+  // Combine header and rows
   return [headerRow, ...rows].join('\n');
-}
+};
 
 /**
- * Generate a downloadable CSV file from data
- * @param data The data to export
- * @param filename The name of the file to download
- * @param headers Optional custom headers
+ * Downloads data as a CSV file
+ * @param data Array of objects to download
+ * @param filename Name of the file
+ * @param columns Optional specific columns to include
  */
-export function downloadCSV(data: any[], filename: string, headers?: string[]): void {
-  const csv = convertToCSV(data, headers);
+export const downloadCSV = <T extends Record<string, any>>(
+  data: T[],
+  filename: string,
+  columns?: (keyof T)[]
+): void => {
+  const csv = convertToCSV(data, columns);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', filename);
+  link.setAttribute('download', `${filename}.csv`);
   link.style.visibility = 'hidden';
   
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-}
+};
 
 /**
- * Format data for Excel export via XLSX library
- * Note: In a real application, you would use a library like xlsx or exceljs
- * This is a simplified version that creates a CSV that Excel can open
+ * Downloads data as a JSON file
+ * @param data Data to download
+ * @param filename Name of the file
  */
-export function downloadExcel(data: any[], filename: string, headers?: string[]): void {
-  // For now, reuse CSV functionality - in a real app, use a proper Excel library
-  downloadCSV(data, `${filename}.xlsx`, headers);
-}
-
-/**
- * Format object for PDF export
- * Note: In a real application, you would use a library like jsPDF or pdfmake
- * @param data The data to format for PDF
- * @param title The title for the PDF document
- */
-export function formatForPDF(data: any[], title: string): any {
-  // This is just a placeholder - in a real app, use a proper PDF generation library
-  return {
-    title,
-    data,
-    timestamp: new Date().toISOString()
-  };
-}
-
-/**
- * Helper function to normalize export parameters
- * @param type Export format (csv, excel, pdf)
- * @param dataSource Data source to export (jira, git, team, member, sprint, all)
- * @param dateRange Date range for data (week, month, quarter, year, custom)
- * @param teamId Optional team ID to filter data
- * @param startDate Optional start date for custom range
- * @param endDate Optional end date for custom range
- */
-export function normalizeExportParams(
-  type: string,
-  dataSource: string,
-  dateRange: string,
-  teamId?: string,
-  startDate?: string,
-  endDate?: string
-): any {
-  // Validate export type
-  const validTypes = ['csv', 'excel', 'pdf'];
-  if (!validTypes.includes(type)) {
-    throw new Error(`Invalid export type: ${type}. Must be one of: ${validTypes.join(', ')}`);
-  }
+export const downloadJSON = <T>(data: T, filename: string): void => {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
   
-  // Validate data source
-  const validSources = ['jira', 'git', 'team', 'member', 'sprint', 'all'];
-  if (!validSources.includes(dataSource)) {
-    throw new Error(`Invalid data source: ${dataSource}. Must be one of: ${validSources.join(', ')}`);
-  }
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${filename}.json`);
+  link.style.visibility = 'hidden';
   
-  // Validate date range
-  const validRanges = ['week', 'month', 'quarter', 'year', 'custom'];
-  if (!validRanges.includes(dateRange)) {
-    throw new Error(`Invalid date range: ${dateRange}. Must be one of: ${validRanges.join(', ')}`);
-  }
-  
-  // If custom date range, ensure both start and end dates are provided
-  if (dateRange === 'custom' && (!startDate || !endDate)) {
-    throw new Error('Custom date range requires both startDate and endDate parameters');
-  }
-  
-  // Calculate dates if not custom range
-  let calculatedStartDate: string | undefined;
-  let calculatedEndDate: string | undefined;
-  
-  if (dateRange !== 'custom') {
-    const endDate = new Date();
-    let startDate = new Date();
-    
-    switch (dateRange) {
-      case 'week':
-        startDate.setDate(endDate.getDate() - 7);
-        break;
-      case 'month':
-        startDate.setMonth(endDate.getMonth() - 1);
-        break;
-      case 'quarter':
-        startDate.setMonth(endDate.getMonth() - 3);
-        break;
-      case 'year':
-        startDate.setFullYear(endDate.getFullYear() - 1);
-        break;
-    }
-    
-    calculatedStartDate = startDate.toISOString().split('T')[0];
-    calculatedEndDate = endDate.toISOString().split('T')[0];
-  } else {
-    calculatedStartDate = startDate;
-    calculatedEndDate = endDate;
-  }
-  
-  return {
-    type,
-    dataSource,
-    dateRange,
-    teamId,
-    startDate: calculatedStartDate,
-    endDate: calculatedEndDate
-  };
-}
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};

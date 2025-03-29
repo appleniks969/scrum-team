@@ -6,6 +6,7 @@ interface MetricCardProps {
   icon: ReactNode;
   trend?: number;
   color?: 'blue' | 'green' | 'purple' | 'indigo' | 'red' | 'yellow';
+  loading?: boolean;
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({ 
@@ -13,7 +14,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
   value, 
   icon, 
   trend, 
-  color = 'blue' 
+  color = 'blue',
+  loading = false
 }) => {
   const getBgColor = () => {
     switch (color) {
@@ -48,11 +50,20 @@ const MetricCard: React.FC<MetricCardProps> = ({
       </div>
       <div>
         <h3 className="text-sm font-medium text-gray-500">{title}</h3>
-        <p className="text-2xl font-bold text-gray-900 MetricCard-value">{value}</p>
-        {trend !== undefined && (
-          <p className={`text-xs ${trend >= 0 ? 'text-green-600' : 'text-red-600'} flex items-center`}>
-            {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
-          </p>
+        {loading ? (
+          <div className="animate-pulse">
+            <div className="h-6 w-16 bg-gray-200 rounded"></div>
+            <div className="h-3 w-10 mt-1 bg-gray-200 rounded"></div>
+          </div>
+        ) : (
+          <>
+            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            {trend !== undefined && (
+              <p className={`text-xs ${trend >= 0 ? 'text-green-600' : 'text-red-600'} flex items-center`}>
+                {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

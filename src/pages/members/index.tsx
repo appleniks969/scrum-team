@@ -1,255 +1,382 @@
-import React, { useState } from 'react';
-import { GetServerSideProps } from 'next';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Layout from '../../components/layout/Layout';
-import MemberCard from '../../components/dashboard/MemberCard';
+import BarChart from '../../components/charts/BarChart';
+import ProgressBar from '../../components/charts/ProgressBar';
+import DateRangePicker from '../../components/dashboard/DateRangePicker';
+import TeamSelector from '../../components/dashboard/TeamSelector';
+import LoadingState from '../../components/ui/LoadingState';
+import ErrorAlert from '../../components/ui/ErrorAlert';
+import { useTeams, useTeamStats } from '../../hooks/useJiraData';
 
-// Sample data - in a real application this would come from your API
-const membersData = [
-  { id: "user-1", name: "Alex Johnson", teamName: "Team Alpha", metrics: { storyPoints: 24, commits: 32, pullRequests: 8, reviews: 12, responseTime: 6.2 } },
-  { id: "user-2", name: "Jordan Smith", teamName: "Team Alpha", metrics: { storyPoints: 18, commits: 25, pullRequests: 5, reviews: 8, responseTime: 4.5 } },
-  { id: "user-3", name: "Taylor Roberts", teamName: "Team Alpha", metrics: { storyPoints: 22, commits: 30, pullRequests: 7, reviews: 10, responseTime: 5.1 } },
-  { id: "user-4", name: "Morgan Lee", teamName: "Team Alpha", metrics: { storyPoints: 21, commits: 33, pullRequests: 8, reviews: 14, responseTime: 3.9 } },
-  { id: "user-5", name: "Riley Chen", teamName: "Team Beta", metrics: { storyPoints: 15, commits: 28, pullRequests: 6, reviews: 10, responseTime: 2.8 } },
-  { id: "user-6", name: "Casey Kim", teamName: "Team Beta", metrics: { storyPoints: 19, commits: 22, pullRequests: 4, reviews: 7, responseTime: 5.5 } },
-  { id: "user-7", name: "Avery Patel", teamName: "Team Beta", metrics: { storyPoints: 16, commits: 24, pullRequests: 5, reviews: 9, responseTime: 4.2 } },
-  { id: "user-8", name: "Quinn Wilson", teamName: "Team Gamma", metrics: { storyPoints: 22, commits: 35, pullRequests: 4, reviews: 15, responseTime: 5.0 } },
-  { id: "user-9", name: "Harper Davis", teamName: "Team Gamma", metrics: { storyPoints: 20, commits: 27, pullRequests: 6, reviews: 12, responseTime: 3.5 } },
-  { id: "user-10", name: "Skyler Martinez", teamName: "Team Delta", metrics: { storyPoints: 12, commits: 18, pullRequests: 3, reviews: 6, responseTime: 8.1 } },
-  { id: "user-11", name: "Drew Thompson", teamName: "Team Delta", metrics: { storyPoints: 14, commits: 22, pullRequests: 4, reviews: 8, responseTime: 6.7 } },
-  { id: "user-12", name: "Jamie Rodriguez", teamName: "Team Epsilon", metrics: { storyPoints: 25, commits: 40, pullRequests: 9, reviews: 18, responseTime: 2.3 } }
-];
-
-// Get unique team names for filtering
-const teamNames = [...new Set(membersData.map(member => member.teamName))];
-
-interface MembersPageProps {
-  members: typeof membersData;
-  teams: string[];
+interface DateRange {
+  startDate: string;
+  endDate: string;
 }
 
-const MembersPage: React.FC<MembersPageProps> = ({ members, teams }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTeam, setSelectedTeam] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+export default function MembersDashboard() {
+  // State for filters
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Get teams data
+  const { 
+    teams, 
+    loading: teamsLoading, 
+    error: teamsError 
+  } = useTeams();
+  
+  // Get team stats (which include member stats)
+  const { 
+    stats: teamStats, 
+    loading: statsLoading, 
+    error: statsError 
+  } = useTeamStats(
+    selectedTeamId,
+    undefined,
+    dateRange?.startDate,
+    dateRange?.endDate
+  );
 
-  // Filter members based on search query and selected team
-  const filteredMembers = members.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTeam = selectedTeam === 'all' || member.teamName === selectedTeam;
-    return matchesSearch && matchesTeam;
-  });
-
-  // Sort members based on selected criteria
-  const sortedMembers = [...filteredMembers].sort((a, b) => {
-    let valueA, valueB;
-
-    if (sortBy === 'name') {
-      valueA = a.name;
-      valueB = b.name;
-    } else if (sortBy === 'team') {
-      valueA = a.teamName;
-      valueB = b.teamName;
-    } else if (sortBy === 'storyPoints') {
-      valueA = a.metrics.storyPoints;
-      valueB = b.metrics.storyPoints;
-    } else if (sortBy === 'commits') {
-      valueA = a.metrics.commits;
-      valueB = b.metrics.commits;
-    } else if (sortBy === 'pullRequests') {
-      valueA = a.metrics.pullRequests;
-      valueB = b.metrics.pullRequests;
-    } else if (sortBy === 'reviews') {
-      valueA = a.metrics.reviews;
-      valueB = b.metrics.reviews;
-    } else if (sortBy === 'responseTime') {
-      valueA = a.metrics.responseTime;
-      valueB = b.metrics.responseTime;
-    } else {
-      valueA = a.name;
-      valueB = b.name;
+  // Set default date range on first load
+  useEffect(() => {
+    if (!dateRange) {
+      // Default to last 30 days
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      
+      setDateRange({
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0]
+      });
     }
+  }, [dateRange]);
 
-    if (sortOrder === 'asc') {
-      return valueA > valueB ? 1 : -1;
-    } else {
-      return valueA < valueB ? 1 : -1;
-    }
-  });
-
-  // Toggle sort order when clicking on the same sort criteria
-  const handleSortChange = (criteria: string) => {
-    if (sortBy === criteria) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(criteria);
-      setSortOrder('asc');
-    }
+  // Prepare data for member metrics
+  const prepareMemberMetrics = () => {
+    if (!teamStats || !teamStats.memberStats) return [];
+    
+    return teamStats.memberStats.map(member => {
+      return {
+        id: member.accountId,
+        name: member.displayName,
+        totalPoints: member.totalStoryPoints,
+        completedPoints: member.completedStoryPoints,
+        completionRate: member.completionPercentage,
+        teamId: teamStats.teamId,
+        teamName: teamStats.teamName,
+        // Mock data for metrics not in the API yet
+        commitCount: Math.floor(Math.random() * 80) + 10,
+        prCount: Math.floor(Math.random() * 15) + 2,
+        reviewCount: Math.floor(Math.random() * 20) + 5,
+        avgTimeToMerge: Math.floor(Math.random() * 24) + 2
+      };
+    });
   };
+
+  // Filter members based on search term
+  const filterMembers = (members: any[]) => {
+    if (!searchTerm) return members;
+    
+    const lowercaseSearch = searchTerm.toLowerCase();
+    return members.filter(member => 
+      member.name.toLowerCase().includes(lowercaseSearch)
+    );
+  };
+
+  // Sort members by completion rate (highest first)
+  const sortMembers = (members: any[]) => {
+    return [...members].sort((a, b) => b.completionRate - a.completionRate);
+  };
+
+  // Process member data
+  const memberMetrics = prepareMemberMetrics();
+  const filteredMembers = sortMembers(filterMembers(memberMetrics));
+
+  // Prepare member comparison data for chart
+  const prepareMemberComparisonData = () => {
+    return filteredMembers.slice(0, 5).map(member => ({
+      name: member.name,
+      storyPoints: member.completedPoints,
+      commits: member.commitCount,
+      prs: member.prCount,
+      reviews: member.reviewCount
+    }));
+  };
+
+  const memberComparisonData = prepareMemberComparisonData();
+
+  // Calculate aggregate stats
+  const calculateAggregateStats = () => {
+    if (!memberMetrics || memberMetrics.length === 0) return {
+      totalMembers: 0,
+      averageCompletionRate: 0,
+      totalStoryPoints: 0,
+      totalCommits: 0,
+      totalPRs: 0
+    };
+    
+    return {
+      totalMembers: memberMetrics.length,
+      averageCompletionRate: memberMetrics.reduce((sum, member) => sum + member.completionRate, 0) / memberMetrics.length,
+      totalStoryPoints: memberMetrics.reduce((sum, member) => sum + member.completedPoints, 0),
+      totalCommits: memberMetrics.reduce((sum, member) => sum + member.commitCount, 0),
+      totalPRs: memberMetrics.reduce((sum, member) => sum + member.prCount, 0)
+    };
+  };
+  
+  const aggregateStats = calculateAggregateStats();
+
+  // Render loading or error states
+  if (teamsLoading && !teams) {
+    return (
+      <Layout title="Members">
+        <LoadingState height={500} message="Loading teams data..." />
+      </Layout>
+    );
+  }
+
+  if (teamsError) {
+    return (
+      <Layout title="Members">
+        <ErrorAlert 
+          message="Failed to load teams data" 
+          details="There was an error fetching the data. Please try again later."
+        />
+      </Layout>
+    );
+  }
 
   return (
-    <Layout title="Team Members | Development Metrics Dashboard">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">Team Members</h1>
-        <p className="text-gray-600">
-          Individual contributor metrics across all teams.
-        </p>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="col-span-1 md:col-span-2">
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-              Search Members
-            </label>
+    <Layout title="Members">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 space-y-4 md:space-y-0">
+        <h1 className="text-2xl font-bold">Members Dashboard</h1>
+        
+        <div className="w-full md:w-auto flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
+          <TeamSelector
+            selectedTeamId={selectedTeamId || undefined}
+            onTeamSelect={setSelectedTeamId}
+          />
+          
+          <div className="relative w-full sm:w-auto">
             <input
               type="text"
-              id="search"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              placeholder="Search by name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search members..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 w-full md:w-64 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-          </div>
-          <div>
-            <label htmlFor="team" className="block text-sm font-medium text-gray-700 mb-1">
-              Filter by Team
-            </label>
-            <select
-              id="team"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              value={selectedTeam}
-              onChange={(e) => setSelectedTeam(e.target.value)}
-            >
-              <option value="all">All Teams</option>
-              {teams.map((team) => (
-                <option key={team} value={team}>{team}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700 mb-1">
-              Sort By
-            </label>
-            <select
-              id="sortBy"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              value={sortBy}
-              onChange={(e) => handleSortChange(e.target.value)}
-            >
-              <option value="name">Name</option>
-              <option value="team">Team</option>
-              <option value="storyPoints">Story Points</option>
-              <option value="commits">Commits</option>
-              <option value="pullRequests">Pull Requests</option>
-              <option value="reviews">Reviews</option>
-              <option value="responseTime">Response Time</option>
-            </select>
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg 
+                className="h-4 w-4 text-gray-400" 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 20 20" 
+                fill="currentColor" 
+                aria-hidden="true"
+              >
+                <path 
+                  fillRule="evenodd" 
+                  d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" 
+                  clipRule="evenodd" 
+                />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Members Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {sortedMembers.map((member) => (
-          <MemberCard 
-            key={member.id}
-            id={member.id}
-            name={member.name}
-            teamName={member.teamName}
-            metrics={member.metrics}
-          />
-        ))}
-      </div>
-
-      {sortedMembers.length === 0 && (
-        <div className="bg-white p-8 rounded-lg shadow text-center">
-          <p className="text-gray-500">No members match your search criteria.</p>
+      
+      <DateRangePicker
+        onChange={setDateRange}
+        className="mb-6"
+      />
+      
+      {/* Team selection prompt */}
+      {!selectedTeamId && (
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded-md">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg
+                className="h-5 w-5 text-blue-400"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-700">
+                Please select a team to view member metrics.
+              </p>
+            </div>
+          </div>
         </div>
       )}
-
-      {/* Performance Rankings */}
-      <div className="mt-10">
-        <h2 className="text-xl font-bold mb-4">Performance Rankings</h2>
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSortChange('name')}
-                >
-                  Name
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSortChange('team')}
-                >
-                  Team
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSortChange('storyPoints')}
-                >
-                  Story Points
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSortChange('commits')}
-                >
-                  Commits
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSortChange('pullRequests')}
-                >
-                  PRs
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSortChange('reviews')}
-                >
-                  Reviews
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSortChange('responseTime')}
-                >
-                  Resp. Time
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {sortedMembers.map((member, index) => (
-                <tr key={member.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{member.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.teamName}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.metrics.storyPoints}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.metrics.commits}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.metrics.pullRequests}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.metrics.reviews}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.metrics.responseTime} hrs</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      
+      {/* Loading state for stats */}
+      {selectedTeamId && statsLoading && !teamStats && (
+        <LoadingState height={400} message={`Loading metrics for ${teams.find(t => t.id === selectedTeamId)?.name || 'team'}...`} />
+      )}
+      
+      {/* Error state for stats */}
+      {selectedTeamId && statsError && (
+        <ErrorAlert 
+          message="Failed to load member metrics" 
+          details="There was an error fetching the data. Please try again later."
+        />
+      )}
+      
+      {/* Member data display */}
+      {selectedTeamId && teamStats && !statsLoading && (
+        <>
+          {/* Members summary stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white p-4 rounded-lg shadow">
+              <div className="text-sm text-gray-500">Total Members</div>
+              <div className="text-2xl font-bold mt-1">{aggregateStats.totalMembers}</div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg shadow">
+              <div className="text-sm text-gray-500">Avg. Completion Rate</div>
+              <div className="text-2xl font-bold mt-1">{aggregateStats.averageCompletionRate.toFixed(1)}%</div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg shadow">
+              <div className="text-sm text-gray-500">Total Story Points</div>
+              <div className="text-2xl font-bold mt-1">{aggregateStats.totalStoryPoints}</div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg shadow">
+              <div className="text-sm text-gray-500">Total Commits</div>
+              <div className="text-2xl font-bold mt-1">{aggregateStats.totalCommits}</div>
+            </div>
+          </div>
+          
+          {/* Member Comparison Chart */}
+          {memberComparisonData.length > 0 && (
+            <div className="mb-6">
+              <BarChart 
+                data={memberComparisonData} 
+                xAxisKey="name" 
+                bars={[
+                  { key: 'storyPoints', name: 'Story Points', color: '#3B82F6' },
+                  { key: 'commits', name: 'Commits', color: '#8B5CF6' },
+                  { key: 'prs', name: 'Pull Requests', color: '#F97316' },
+                  { key: 'reviews', name: 'Reviews', color: '#10B981' }
+                ]}
+                title="Top Contributors"
+                height={300}
+              />
+            </div>
+          )}
+          
+          {/* Members List */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Team Members</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Detailed metrics for each member in {teamStats.teamName} during the selected time period.
+              </p>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Member Name
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Story Points (Completed/Total)
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Completion Rate
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Commits
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Pull Requests
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Reviews
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Avg. Time to Merge
+                    </th>
+                    <th scope="col" className="relative px-6 py-3">
+                      <span className="sr-only">View</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredMembers.map((member) => (
+                    <tr key={member.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-medium">
+                            {member.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div className="ml-4">
+                            <div className="font-medium text-gray-900">{member.name}</div>
+                            <div className="text-sm text-gray-500">{member.teamName}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {member.completedPoints} / {member.totalPoints}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="w-32">
+                          <ProgressBar
+                            value={member.completionRate}
+                            max={100}
+                            showValue={true}
+                            valueFormatter={(value) => `${value.toFixed(1)}%`}
+                            size="sm"
+                          />
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {member.commitCount}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {member.prCount}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {member.reviewCount}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {member.avgTimeToMerge} hrs
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Link href={`/members/${member.id}`} className="text-blue-600 hover:text-blue-900">
+                          View Details
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {filteredMembers.length === 0 && (
+              <div className="px-6 py-8 text-center text-gray-500">
+                No members found matching your search criteria.
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </Layout>
   );
-};
-
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  // In a real application, you would fetch this data from your API
-  // For now, we'll use the mock data defined above
-
-  return {
-    props: {
-      members: membersData,
-      teams: teamNames
-    }
-  };
-};
-
-export default MembersPage;
+}

@@ -1,250 +1,322 @@
-import React, { useState } from 'react';
-import { GetServerSideProps } from 'next';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Layout from '../../components/layout/Layout';
-import TeamCard from '../../components/dashboard/TeamCard';
 import BarChart from '../../components/charts/BarChart';
+import ProgressBar from '../../components/charts/ProgressBar';
+import DateRangePicker from '../../components/dashboard/DateRangePicker';
+import LoadingState from '../../components/ui/LoadingState';
+import ErrorAlert from '../../components/ui/ErrorAlert';
+import ExpandableTable from '../../components/tables/ExpandableTable';
+import DetailCard from '../../components/cards/DetailCard';
+import { useTeams, useAllTeamsStats } from '../../hooks/useJiraData';
+import { useIntegratedTeamMetrics } from '../../hooks/useIntegratedMetrics';
 
-// Sample data - in a real application this would come from your API
-const teamsData = [
-  { 
-    id: "team-alpha", 
-    name: "Team Alpha", 
-    storyPoints: { completed: 85, total: 100 }, 
-    commits: 120, 
-    pullRequests: 28, 
-    efficiency: 0.85 
-  },
-  { 
-    id: "team-beta", 
-    name: "Team Beta", 
-    storyPoints: { completed: 72, total: 90 }, 
-    commits: 95, 
-    pullRequests: 22, 
-    efficiency: 0.80 
-  },
-  { 
-    id: "team-gamma", 
-    name: "Team Gamma", 
-    storyPoints: { completed: 65, total: 70 }, 
-    commits: 110, 
-    pullRequests: 15, 
-    efficiency: 0.93 
-  },
-  { 
-    id: "team-delta", 
-    name: "Team Delta", 
-    storyPoints: { completed: 45, total: 60 }, 
-    commits: 65, 
-    pullRequests: 12, 
-    efficiency: 0.75 
-  },
-  { 
-    id: "team-epsilon", 
-    name: "Team Epsilon", 
-    storyPoints: { completed: 92, total: 110 }, 
-    commits: 140, 
-    pullRequests: 35, 
-    efficiency: 0.84 
-  },
-  { 
-    id: "team-zeta", 
-    name: "Team Zeta", 
-    storyPoints: { completed: 57, total: 80 }, 
-    commits: 75, 
-    pullRequests: 20, 
-    efficiency: 0.71 
-  },
-  { 
-    id: "team-eta", 
-    name: "Team Eta", 
-    storyPoints: { completed: 68, total: 75 }, 
-    commits: 88, 
-    pullRequests: 18, 
-    efficiency: 0.91 
-  },
-  { 
-    id: "team-theta", 
-    name: "Team Theta", 
-    storyPoints: { completed: 79, total: 95 }, 
-    commits: 105, 
-    pullRequests: 25, 
-    efficiency: 0.83 
-  }
-];
-
-// Format data for bar chart
-const chartData = teamsData.map(team => ({
-  name: team.name,
-  storyPoints: team.storyPoints.completed,
-  commits: team.commits,
-  pullRequests: team.pullRequests
-}));
-
-interface TeamsPageProps {
-  teams: typeof teamsData;
-  chartData: typeof chartData;
+interface DateRange {
+  startDate: string;
+  endDate: string;
 }
 
-const TeamsPage: React.FC<TeamsPageProps> = ({ teams, chartData }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-
-  // Filter teams based on search query
-  const filteredTeams = teams.filter(team => 
-    team.name.toLowerCase().includes(searchQuery.toLowerCase())
+export default function TeamsDashboard() {
+  // State for filters
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Get teams data
+  const { 
+    teams, 
+    loading: teamsLoading, 
+    error: teamsError 
+  } = useTeams();
+  
+  // Get all teams stats
+  const { 
+    stats: allTeamsStats, 
+    loading: statsLoading, 
+    error: statsError 
+  } = useAllTeamsStats(
+    dateRange?.startDate,
+    dateRange?.endDate
   );
 
-  // Sort teams based on selected criteria
-  const sortedTeams = [...filteredTeams].sort((a, b) => {
-    let valueA, valueB;
-
-    if (sortBy === 'name') {
-      valueA = a.name;
-      valueB = b.name;
-    } else if (sortBy === 'storyPoints') {
-      valueA = a.storyPoints.completed;
-      valueB = b.storyPoints.completed;
-    } else if (sortBy === 'commits') {
-      valueA = a.commits;
-      valueB = b.commits;
-    } else if (sortBy === 'pullRequests') {
-      valueA = a.pullRequests;
-      valueB = b.pullRequests;
-    } else if (sortBy === 'efficiency') {
-      valueA = a.efficiency;
-      valueB = b.efficiency;
-    } else {
-      valueA = a.name;
-      valueB = b.name;
+  // Set default date range on first load
+  useEffect(() => {
+    if (!dateRange) {
+      // Default to last 30 days
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      
+      setDateRange({
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0]
+      });
     }
+  }, [dateRange]);
 
-    if (sortOrder === 'asc') {
-      return valueA > valueB ? 1 : -1;
-    } else {
-      return valueA < valueB ? 1 : -1;
-    }
-  });
-
-  // Toggle sort order when clicking on the same sort criteria
-  const handleSortChange = (criteria: string) => {
-    if (sortBy === criteria) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(criteria);
-      setSortOrder('asc');
-    }
+  // Prepare data for team metrics
+  const prepareTeamMetrics = () => {
+    if (!allTeamsStats || !teams) return [];
+    
+    return teams.map(team => {
+      // Find stats for this team
+      const stats = allTeamsStats.find(stat => stat.teamId === team.id);
+      
+      return {
+        id: team.id,
+        name: team.name,
+        totalPoints: stats?.totalStoryPoints || 0,
+        completedPoints: stats?.completedStoryPoints || 0,
+        completionRate: stats?.completionPercentage || 0,
+        memberCount: stats?.memberStats.length || 0,
+        // Mock data for metrics not in the API yet
+        commitCount: Math.floor(Math.random() * 200) + 50,
+        prCount: Math.floor(Math.random() * 40) + 10,
+        avgTimeToMerge: Math.floor(Math.random() * 24) + 4,
+        bugCount: Math.floor(Math.random() * 15)
+      };
+    });
   };
+
+  // Filter teams based on search term
+  const filterTeams = (teams: any[]) => {
+    if (!searchTerm) return teams;
+    
+    const lowercaseSearch = searchTerm.toLowerCase();
+    return teams.filter(team => 
+      team.name.toLowerCase().includes(lowercaseSearch)
+    );
+  };
+
+  // Sort teams by completion rate (highest first)
+  const sortTeams = (teams: any[]) => {
+    return [...teams].sort((a, b) => b.completionRate - a.completionRate);
+  };
+
+  // Process team data
+  const teamMetrics = prepareTeamMetrics();
+  const filteredTeams = sortTeams(filterTeams(teamMetrics));
+
+  // Prepare team comparison data for chart
+  const prepareTeamComparisonData = () => {
+    return filteredTeams.slice(0, 5).map(team => ({
+      name: team.name,
+      storyPoints: team.completedPoints,
+      completionRate: team.completionRate,
+      commits: team.commitCount,
+      prs: team.prCount
+    }));
+  };
+
+  const teamComparisonData = prepareTeamComparisonData();
+
+  // Calculate aggregate stats
+  const calculateAggregateStats = () => {
+    if (!teamMetrics || teamMetrics.length === 0) return {
+      totalTeams: 0,
+      averageCompletionRate: 0,
+      totalStoryPoints: 0,
+      totalCommits: 0,
+      totalPRs: 0
+    };
+    
+    return {
+      totalTeams: teamMetrics.length,
+      averageCompletionRate: teamMetrics.reduce((sum, team) => sum + team.completionRate, 0) / teamMetrics.length,
+      totalStoryPoints: teamMetrics.reduce((sum, team) => sum + team.completedPoints, 0),
+      totalCommits: teamMetrics.reduce((sum, team) => sum + team.commitCount, 0),
+      totalPRs: teamMetrics.reduce((sum, team) => sum + team.prCount, 0)
+    };
+  };
+  
+  const aggregateStats = calculateAggregateStats();
+
+  // Render loading or error states
+  if ((teamsLoading && !teams) || (statsLoading && !allTeamsStats)) {
+    return (
+      <Layout title="Teams">
+        <LoadingState height={500} message="Loading teams data..." />
+      </Layout>
+    );
+  }
+
+  if (teamsError || statsError) {
+    return (
+      <Layout title="Teams">
+        <ErrorAlert 
+          message="Failed to load teams data" 
+          details="There was an error fetching the data. Please try again later."
+        />
+      </Layout>
+    );
+  }
 
   return (
-    <Layout title="Teams | Development Metrics Dashboard">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">Teams</h1>
-        <p className="text-gray-600">
-          Overview of all scrum teams and their performance metrics.
-        </p>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-              Search Teams
-            </label>
+    <Layout title="Teams">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 space-y-4 md:space-y-0">
+        <h1 className="text-2xl font-bold">Teams Dashboard</h1>
+        
+        <div className="w-full md:w-auto">
+          <div className="relative">
             <input
               type="text"
-              id="search"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              placeholder="Search by team name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search teams..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 w-full md:w-64 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-          </div>
-          <div className="w-full md:w-48">
-            <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700 mb-1">
-              Sort By
-            </label>
-            <select
-              id="sortBy"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              value={sortBy}
-              onChange={(e) => handleSortChange(e.target.value)}
-            >
-              <option value="name">Team Name</option>
-              <option value="storyPoints">Story Points</option>
-              <option value="commits">Commits</option>
-              <option value="pullRequests">Pull Requests</option>
-              <option value="efficiency">Efficiency</option>
-            </select>
-          </div>
-          <div className="w-full md:w-48">
-            <label htmlFor="sortOrder" className="block text-sm font-medium text-gray-700 mb-1">
-              Sort Order
-            </label>
-            <select
-              id="sortOrder"
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg 
+                className="h-4 w-4 text-gray-400" 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 20 20" 
+                fill="currentColor" 
+                aria-hidden="true"
+              >
+                <path 
+                  fillRule="evenodd" 
+                  d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" 
+                  clipRule="evenodd" 
+                />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Team Metrics Chart */}
+      
+      <DateRangePicker
+        onChange={setDateRange}
+        className="mb-6"
+      />
+      
+      {/* Teams summary stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-500">Total Teams</div>
+          <div className="text-2xl font-bold mt-1">{aggregateStats.totalTeams}</div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-500">Avg. Completion Rate</div>
+          <div className="text-2xl font-bold mt-1">{aggregateStats.averageCompletionRate.toFixed(1)}%</div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-500">Total Story Points</div>
+          <div className="text-2xl font-bold mt-1">{aggregateStats.totalStoryPoints}</div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-500">Total Commits</div>
+          <div className="text-2xl font-bold mt-1">{aggregateStats.totalCommits}</div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-500">Total Pull Requests</div>
+          <div className="text-2xl font-bold mt-1">{aggregateStats.totalPRs}</div>
+        </div>
+      </div>
+      
+      {/* Team Comparison Chart */}
       <div className="mb-6">
         <BarChart 
-          data={chartData} 
+          data={teamComparisonData} 
           xAxisKey="name" 
           bars={[
-            { key: 'storyPoints', name: 'Story Points', color: '#3b82f6' },
-            { key: 'commits', name: 'Commits', color: '#10b981' },
-            { key: 'pullRequests', name: 'Pull Requests', color: '#8b5cf6' }
+            { key: 'storyPoints', name: 'Story Points', color: '#3B82F6' },
+            { key: 'completionRate', name: 'Completion Rate (%)', color: '#10B981' },
+            { key: 'commits', name: 'Commits', color: '#8B5CF6' },
+            { key: 'prs', name: 'Pull Requests', color: '#F97316' }
           ]}
-          title="Team Metrics Comparison"
+          title="Top Teams Comparison"
           height={300}
-          layout="vertical"
         />
       </div>
-
-      {/* Teams Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {sortedTeams.map((team) => (
-          <TeamCard
-            key={team.id}
-            id={team.id}
-            name={team.name}
-            storyPoints={team.storyPoints}
-            commits={team.commits}
-            pullRequests={team.pullRequests}
-            efficiency={team.efficiency}
+      
+      {/* Teams List */}
+      <ExpandableTable
+        data={filteredTeams}
+        keyField="id"
+        loading={teamsLoading || statsLoading}
+        emptyMessage="No teams found matching your search criteria."
+        columns={[
+          { key: 'name', header: 'Team Name' },
+          { key: 'memberCount', header: 'Members' },
+          {
+            key: 'storyPoints',
+            header: 'Story Points',
+            render: (_, row) => `${row.completedPoints} / ${row.totalPoints}`
+          },
+          {
+            key: 'completionRate',
+            header: 'Completion Rate',
+            render: (value) => (
+              <div className="w-32">
+                <ProgressBar
+                  value={value}
+                  max={100}
+                  showValue={true}
+                  valueFormatter={(val) => `${val.toFixed(1)}%`}
+                  size="sm"
+                />
+              </div>
+            )
+          },
+          { key: 'commitCount', header: 'Commits' },
+          { key: 'prCount', header: 'Pull Requests' },
+          { key: 'avgTimeToMerge', header: 'Avg. Time to Merge', render: (value) => `${value} hrs` },
+          { key: 'bugCount', header: 'Bugs' },
+          {
+            key: 'actions',
+            header: '',
+            render: (_, row) => (
+              <Link href={`/teams/${row.id}`} className="text-blue-600 hover:text-blue-900">
+                View Details
+              </Link>
+            )
+          }
+        ]}
+        renderExpandedRow={(row) => (
+          <DetailCard
+            title={`${row.name} Details`}
+            sections={[
+              {
+                title: 'Performance Metrics',
+                items: [
+                  { label: 'Story Points Planned', value: row.totalPoints },
+                  { label: 'Story Points Completed', value: row.completedPoints },
+                  { label: 'Completion Rate', value: `${row.completionRate.toFixed(1)}%` },
+                  { label: 'Commits', value: row.commitCount },
+                  { label: 'Pull Requests', value: row.prCount },
+                  { label: 'Average Time to Merge', value: `${row.avgTimeToMerge} hours` },
+                  { label: 'Bugs Found', value: row.bugCount },
+                ]
+              },
+              {
+                title: 'Team Information',
+                items: [
+                  { label: 'Members', value: row.memberCount },
+                  { label: 'Team Lead', value: 'Not Available' },
+                  { label: 'Department', value: 'Engineering' },
+                  { label: 'Active Since', value: 'January 2023' },
+                ]
+              }
+            ]}
+            actions={
+              <>
+                <Link href={`/teams/${row.id}`} className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow-sm">
+                  View Dashboard
+                </Link>
+                <button
+                  type="button"
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Export Data
+                </button>
+              </>
+            }
           />
-        ))}
-      </div>
-
-      {sortedTeams.length === 0 && (
-        <div className="bg-white p-8 rounded-lg shadow text-center">
-          <p className="text-gray-500">No teams match your search criteria.</p>
-        </div>
-      )}
+        )}
+      />
     </Layout>
   );
-};
-
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  // In a real application, you would fetch this data from your API
-  // For now, we'll use the mock data defined above
-
-  return {
-    props: {
-      teams: teamsData,
-      chartData
-    }
-  };
-};
-
-export default TeamsPage;
+}

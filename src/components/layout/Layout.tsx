@@ -14,7 +14,7 @@ const Layout: React.FC<LayoutProps> = ({
   title = 'Development Metrics Dashboard' 
 }) => {
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen flex flex-col bg-gray-100">
       <Head>
         <title>{`${title} | ScrumTeam`}</title>
         <meta name="description" content="Track story points and development metrics across your organization" />
@@ -23,10 +23,10 @@ const Layout: React.FC<LayoutProps> = ({
 
       <Header />
       
-      <div className="flex">
+      <div className="flex flex-1">
         <Sidebar />
         
-        <main className="flex-1 p-6 sm:p-8 max-w-7xl mx-auto">
+        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           {children}
         </main>
       </div>

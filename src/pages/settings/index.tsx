@@ -1,560 +1,437 @@
 import React, { useState } from 'react';
-import { GetServerSideProps } from 'next';
 import Layout from '../../components/layout/Layout';
+import Link from 'next/link';
 
-interface SettingsPageProps {
-  jiraSettings: {
-    baseUrl: string;
-    username: string;
-    apiTokenMasked: string;
-    isConnected: boolean;
-  };
-  gitSettings: {
-    provider: 'github' | 'gitlab' | 'bitbucket';
-    organization: string;
-    apiTokenMasked: string;
-    isConnected: boolean;
-  };
-  dashboardSettings: {
-    defaultDateRange: 'week' | 'month' | 'quarter' | 'year';
-    refreshInterval: number;
-    defaultTeam: string;
-    theme: 'light' | 'dark' | 'system';
-    showVelocityTrend: boolean;
-    enableEmailReports: boolean;
-    emailReportFrequency: 'daily' | 'weekly' | 'monthly';
-    emailRecipients: string[];
-  };
-}
+export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState('general');
+  const [darkMode, setDarkMode] = useState(false);
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [dashboardRefreshRate, setDashboardRefreshRate] = useState('30');
+  const [defaultTimeRange, setDefaultTimeRange] = useState('30');
+  const [dataIntegrations, setDataIntegrations] = useState({
+    jira: true,
+    github: true,
+    gitlab: false
+  });
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ 
-  jiraSettings, 
-  gitSettings, 
-  dashboardSettings 
-}) => {
-  // State for form values
-  const [jiraBaseUrl, setJiraBaseUrl] = useState(jiraSettings.baseUrl);
-  const [jiraUsername, setJiraUsername] = useState(jiraSettings.username);
-  const [jiraApiToken, setJiraApiToken] = useState('');
-  
-  const [gitProvider, setGitProvider] = useState(gitSettings.provider);
-  const [gitOrganization, setGitOrganization] = useState(gitSettings.organization);
-  const [gitApiToken, setGitApiToken] = useState('');
-  
-  const [defaultDateRange, setDefaultDateRange] = useState(dashboardSettings.defaultDateRange);
-  const [refreshInterval, setRefreshInterval] = useState(dashboardSettings.refreshInterval);
-  const [defaultTeam, setDefaultTeam] = useState(dashboardSettings.defaultTeam);
-  const [theme, setTheme] = useState(dashboardSettings.theme);
-  const [showVelocityTrend, setShowVelocityTrend] = useState(dashboardSettings.showVelocityTrend);
-  const [enableEmailReports, setEnableEmailReports] = useState(dashboardSettings.enableEmailReports);
-  const [emailReportFrequency, setEmailReportFrequency] = useState(dashboardSettings.emailReportFrequency);
-  const [emailRecipients, setEmailRecipients] = useState(dashboardSettings.emailRecipients.join(', '));
-  
-  // Form submission handlers
-  const handleJiraFormSubmit = (e: React.FormEvent) => {
+  const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would make an API call to update JIRA settings
-    console.log('JIRA settings submitted:', { jiraBaseUrl, jiraUsername, jiraApiToken });
-    alert('JIRA settings saved successfully!');
-  };
-  
-  const handleGitFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // In a real app, this would make an API call to update Git settings
-    console.log('Git settings submitted:', { gitProvider, gitOrganization, gitApiToken });
-    alert('Git settings saved successfully!');
-  };
-  
-  const handleDashboardFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // In a real app, this would make an API call to update dashboard settings
-    const formattedEmailRecipients = emailRecipients.split(',').map(email => email.trim());
-    console.log('Dashboard settings submitted:', { 
-      defaultDateRange, 
-      refreshInterval, 
-      defaultTeam,
-      theme,
-      showVelocityTrend,
-      enableEmailReports,
-      emailReportFrequency,
-      emailRecipients: formattedEmailRecipients
-    });
-    alert('Dashboard settings saved successfully!');
-  };
-  
-  const handleTestJiraConnection = () => {
-    // In a real app, this would test the JIRA connection using the provided credentials
-    alert('JIRA connection test successful!');
-  };
-  
-  const handleTestGitConnection = () => {
-    // In a real app, this would test the Git connection using the provided credentials
-    alert('Git connection test successful!');
+    // In a real app, this would save settings to the backend
+    alert('Settings saved successfully!');
   };
 
   return (
-    <Layout title="Settings | Development Metrics Dashboard">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">Dashboard Settings</h1>
-        <p className="text-gray-600">
-          Configure your JIRA and Git connections, and customize dashboard preferences.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* JIRA Configuration */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-bold mb-4">JIRA Connection</h2>
-          <div className="flex items-center mb-4">
-            <div className={`w-3 h-3 rounded-full mr-2 ${jiraSettings.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span>{jiraSettings.isConnected ? 'Connected' : 'Not Connected'}</span>
+    <Layout title="Settings">
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Sidebar */}
+        <div className="md:w-64 flex-shrink-0">
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-4 py-5 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Settings</h3>
+            </div>
+            <div className="divide-y divide-gray-200">
+              <button
+                className={`w-full text-left px-4 py-3 ${activeTab === 'general' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                onClick={() => setActiveTab('general')}
+              >
+                General
+              </button>
+              <button
+                className={`w-full text-left px-4 py-3 ${activeTab === 'appearance' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                onClick={() => setActiveTab('appearance')}
+              >
+                Appearance
+              </button>
+              <button
+                className={`w-full text-left px-4 py-3 ${activeTab === 'notifications' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                onClick={() => setActiveTab('notifications')}
+              >
+                Notifications
+              </button>
+              <button
+                className={`w-full text-left px-4 py-3 ${activeTab === 'integrations' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                onClick={() => setActiveTab('integrations')}
+              >
+                Integrations
+              </button>
+              <Link 
+                href="/settings/profile" 
+                className={`block w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50`}
+              >
+                Profile Settings
+              </Link>
+            </div>
           </div>
-          
-          <form onSubmit={handleJiraFormSubmit}>
-            <div className="mb-4">
-              <label htmlFor="jiraBaseUrl" className="block text-sm font-medium text-gray-700 mb-1">
-                JIRA Base URL
-              </label>
-              <input
-                type="url"
-                id="jiraBaseUrl"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={jiraBaseUrl}
-                onChange={(e) => setJiraBaseUrl(e.target.value)}
-                placeholder="https://your-instance.atlassian.net"
-                required
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label htmlFor="jiraUsername" className="block text-sm font-medium text-gray-700 mb-1">
-                JIRA Username/Email
-              </label>
-              <input
-                type="email"
-                id="jiraUsername"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={jiraUsername}
-                onChange={(e) => setJiraUsername(e.target.value)}
-                placeholder="your-email@example.com"
-                required
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label htmlFor="jiraApiToken" className="block text-sm font-medium text-gray-700 mb-1">
-                JIRA API Token
-              </label>
-              <input
-                type="password"
-                id="jiraApiToken"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={jiraApiToken}
-                onChange={(e) => setJiraApiToken(e.target.value)}
-                placeholder={jiraSettings.apiTokenMasked}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Leave blank to keep the existing token unchanged.
-              </p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Save JIRA Settings
-              </button>
-              <button
-                type="button"
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-                onClick={handleTestJiraConnection}
-              >
-                Test Connection
-              </button>
-            </div>
-          </form>
         </div>
 
-        {/* Git Configuration */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-bold mb-4">Git Provider Connection</h2>
-          <div className="flex items-center mb-4">
-            <div className={`w-3 h-3 rounded-full mr-2 ${gitSettings.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span>{gitSettings.isConnected ? 'Connected' : 'Not Connected'}</span>
-          </div>
-          
-          <form onSubmit={handleGitFormSubmit}>
-            <div className="mb-4">
-              <label htmlFor="gitProvider" className="block text-sm font-medium text-gray-700 mb-1">
-                Git Provider
-              </label>
-              <select
-                id="gitProvider"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={gitProvider}
-                onChange={(e) => setGitProvider(e.target.value as 'github' | 'gitlab' | 'bitbucket')}
-                required
-              >
-                <option value="github">GitHub</option>
-                <option value="gitlab">GitLab</option>
-                <option value="bitbucket">Bitbucket</option>
-              </select>
+        {/* Main content */}
+        <div className="flex-1">
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+              <h3 className="text-lg font-medium text-gray-900">
+                {activeTab === 'general' && 'General Settings'}
+                {activeTab === 'appearance' && 'Appearance Settings'}
+                {activeTab === 'notifications' && 'Notification Settings'}
+                {activeTab === 'integrations' && 'Integration Settings'}
+              </h3>
             </div>
-            
-            <div className="mb-4">
-              <label htmlFor="gitOrganization" className="block text-sm font-medium text-gray-700 mb-1">
-                Organization/Account Name
-              </label>
-              <input
-                type="text"
-                id="gitOrganization"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={gitOrganization}
-                onChange={(e) => setGitOrganization(e.target.value)}
-                placeholder="your-organization"
-                required
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label htmlFor="gitApiToken" className="block text-sm font-medium text-gray-700 mb-1">
-                API Token/Personal Access Token
-              </label>
-              <input
-                type="password"
-                id="gitApiToken"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={gitApiToken}
-                onChange={(e) => setGitApiToken(e.target.value)}
-                placeholder={gitSettings.apiTokenMasked}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Leave blank to keep the existing token unchanged.
-              </p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Save Git Settings
-              </button>
-              <button
-                type="button"
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-                onClick={handleTestGitConnection}
-              >
-                Test Connection
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      {/* Dashboard Preferences */}
-      <div className="bg-white p-6 rounded-lg shadow mt-6">
-        <h2 className="text-xl font-bold mb-4">Dashboard Preferences</h2>
-        
-        <form onSubmit={handleDashboardFormSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <div>
-              <label htmlFor="defaultDateRange" className="block text-sm font-medium text-gray-700 mb-1">
-                Default Date Range
-              </label>
-              <select
-                id="defaultDateRange"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={defaultDateRange}
-                onChange={(e) => setDefaultDateRange(e.target.value as 'week' | 'month' | 'quarter' | 'year')}
-              >
-                <option value="week">Last 7 Days</option>
-                <option value="month">Last 30 Days</option>
-                <option value="quarter">Last 90 Days</option>
-                <option value="year">Last 365 Days</option>
-              </select>
-            </div>
-            
-            <div>
-              <label htmlFor="refreshInterval" className="block text-sm font-medium text-gray-700 mb-1">
-                Dashboard Refresh Interval (minutes)
-              </label>
-              <input
-                type="number"
-                id="refreshInterval"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={refreshInterval}
-                onChange={(e) => setRefreshInterval(Number(e.target.value))}
-                min="0"
-                step="5"
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Set to 0 to disable auto-refresh.
-              </p>
-            </div>
-            
-            <div>
-              <label htmlFor="defaultTeam" className="block text-sm font-medium text-gray-700 mb-1">
-                Default Team
-              </label>
-              <input
-                type="text"
-                id="defaultTeam"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={defaultTeam}
-                onChange={(e) => setDefaultTeam(e.target.value)}
-                placeholder="Team name or 'all'"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="theme" className="block text-sm font-medium text-gray-700 mb-1">
-                Theme
-              </label>
-              <select
-                id="theme"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'system')}
-              >
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="system">Use System Theme</option>
-              </select>
-            </div>
-            
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="showVelocityTrend"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                checked={showVelocityTrend}
-                onChange={(e) => setShowVelocityTrend(e.target.checked)}
-              />
-              <label htmlFor="showVelocityTrend" className="ml-2 block text-sm text-gray-700">
-                Show Velocity Trend in Overview
-              </label>
-            </div>
-          </div>
-          
-          <h3 className="text-lg font-semibold mb-3">Email Reports</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="enableEmailReports"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                checked={enableEmailReports}
-                onChange={(e) => setEnableEmailReports(e.target.checked)}
-              />
-              <label htmlFor="enableEmailReports" className="ml-2 block text-sm text-gray-700">
-                Enable Automated Email Reports
-              </label>
-            </div>
-            
-            {enableEmailReports && (
-              <>
-                <div>
-                  <label htmlFor="emailReportFrequency" className="block text-sm font-medium text-gray-700 mb-1">
-                    Report Frequency
-                  </label>
-                  <select
-                    id="emailReportFrequency"
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    value={emailReportFrequency}
-                    onChange={(e) => setEmailReportFrequency(e.target.value as 'daily' | 'weekly' | 'monthly')}
-                  >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </div>
+            <div className="px-4 py-5 sm:p-6">
+              <form onSubmit={handleSaveSettings}>
+                {/* General Settings */}
+                {activeTab === 'general' && (
+                  <div className="space-y-6">
+                    <div>
+                      <label htmlFor="dashboard-refresh" className="block text-sm font-medium text-gray-700">
+                        Dashboard Refresh Rate
+                      </label>
+                      <select
+                        id="dashboard-refresh"
+                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                        value={dashboardRefreshRate}
+                        onChange={(e) => setDashboardRefreshRate(e.target.value)}
+                      >
+                        <option value="0">Manual refresh only</option>
+                        <option value="30">Every 30 seconds</option>
+                        <option value="60">Every minute</option>
+                        <option value="300">Every 5 minutes</option>
+                        <option value="600">Every 10 minutes</option>
+                      </select>
+                      <p className="mt-1 text-sm text-gray-500">
+                        How often should the dashboard automatically refresh data.
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="default-timerange" className="block text-sm font-medium text-gray-700">
+                        Default Time Range
+                      </label>
+                      <select
+                        id="default-timerange"
+                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                        value={defaultTimeRange}
+                        onChange={(e) => setDefaultTimeRange(e.target.value)}
+                      >
+                        <option value="7">Last 7 days</option>
+                        <option value="14">Last 14 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                      </select>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Default time range for metrics when opening dashboards.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 
-                <div className="md:col-span-2">
-                  <label htmlFor="emailRecipients" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Recipients (comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    id="emailRecipients"
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    value={emailRecipients}
-                    onChange={(e) => setEmailRecipients(e.target.value)}
-                    placeholder="email1@example.com, email2@example.com"
-                  />
+                {/* Appearance Settings */}
+                {activeTab === 'appearance' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                          darkMode ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                        role="switch"
+                        aria-checked={darkMode}
+                        onClick={() => setDarkMode(!darkMode)}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                            darkMode ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                      <span className="ml-3">
+                        <span className="text-sm font-medium text-gray-900">Dark Mode</span>
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Enable dark mode for a more comfortable viewing experience in low-light environments.
+                    </p>
+                    
+                    <div className="mt-6">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Chart Color Theme
+                      </label>
+                      <div className="mt-2 grid grid-cols-4 gap-3">
+                        <div className="flex items-center">
+                          <input
+                            id="color-theme-default"
+                            name="color-theme"
+                            type="radio"
+                            defaultChecked
+                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                          />
+                          <label htmlFor="color-theme-default" className="ml-3 block text-sm text-gray-700">
+                            Default
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            id="color-theme-blues"
+                            name="color-theme"
+                            type="radio"
+                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                          />
+                          <label htmlFor="color-theme-blues" className="ml-3 block text-sm text-gray-700">
+                            Blues
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            id="color-theme-greens"
+                            name="color-theme"
+                            type="radio"
+                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                          />
+                          <label htmlFor="color-theme-greens" className="ml-3 block text-sm text-gray-700">
+                            Greens
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            id="color-theme-brights"
+                            name="color-theme"
+                            type="radio"
+                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                          />
+                          <label htmlFor="color-theme-brights" className="ml-3 block text-sm text-gray-700">
+                            Vibrant
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Notification Settings */}
+                {activeTab === 'notifications' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                          emailNotifications ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                        role="switch"
+                        aria-checked={emailNotifications}
+                        onClick={() => setEmailNotifications(!emailNotifications)}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                            emailNotifications ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                      <span className="ml-3">
+                        <span className="text-sm font-medium text-gray-900">Email Notifications</span>
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Receive email notifications for report updates and system alerts.
+                    </p>
+                    
+                    <div className="mt-6">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Notification Types
+                      </label>
+                      <div className="mt-2 space-y-4">
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="alerts"
+                              name="alerts"
+                              type="checkbox"
+                              defaultChecked
+                              className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label htmlFor="alerts" className="font-medium text-gray-700">System Alerts</label>
+                            <p className="text-gray-500">Notifications about system updates and maintenance.</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="reports"
+                              name="reports"
+                              type="checkbox"
+                              defaultChecked
+                              className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label htmlFor="reports" className="font-medium text-gray-700">Weekly Reports</label>
+                            <p className="text-gray-500">Weekly summary of team performance metrics.</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="thresholds"
+                              name="thresholds"
+                              type="checkbox"
+                              defaultChecked
+                              className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label htmlFor="thresholds" className="font-medium text-gray-700">Threshold Alerts</label>
+                            <p className="text-gray-500">Notifications when metrics cross defined thresholds.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Integration Settings */}
+                {activeTab === 'integrations' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">JIRA Integration</h3>
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                              dataIntegrations.jira ? 'bg-blue-600' : 'bg-gray-200'
+                            }`}
+                            role="switch"
+                            aria-checked={dataIntegrations.jira}
+                            onClick={() => setDataIntegrations({...dataIntegrations, jira: !dataIntegrations.jira})}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                                dataIntegrations.jira ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                          <span className="ml-3 text-sm text-gray-500">
+                            {dataIntegrations.jira ? 'Connected' : 'Disconnected'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          Configure
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">GitHub Integration</h3>
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                              dataIntegrations.github ? 'bg-blue-600' : 'bg-gray-200'
+                            }`}
+                            role="switch"
+                            aria-checked={dataIntegrations.github}
+                            onClick={() => setDataIntegrations({...dataIntegrations, github: !dataIntegrations.github})}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                                dataIntegrations.github ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                          <span className="ml-3 text-sm text-gray-500">
+                            {dataIntegrations.github ? 'Connected' : 'Disconnected'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          Configure
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">GitLab Integration</h3>
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                              dataIntegrations.gitlab ? 'bg-blue-600' : 'bg-gray-200'
+                            }`}
+                            role="switch"
+                            aria-checked={dataIntegrations.gitlab}
+                            onClick={() => setDataIntegrations({...dataIntegrations, gitlab: !dataIntegrations.gitlab})}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                                dataIntegrations.gitlab ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                          <span className="ml-3 text-sm text-gray-500">
+                            {dataIntegrations.gitlab ? 'Connected' : 'Disconnected'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          Configure
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-8">
+                      <button
+                        type="button"
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <svg
+                          className="-ml-1 mr-2 h-5 w-5 text-gray-500"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        Add New Integration
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Save button */}
+                <div className="mt-8 border-t border-gray-200 pt-5">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
                 </div>
-              </>
-            )}
-          </div>
-          
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Save Dashboard Preferences
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Data Export */}
-      <div className="bg-white p-6 rounded-lg shadow mt-6">
-        <h2 className="text-xl font-bold mb-4">Data Export</h2>
-        <p className="text-gray-600 mb-4">
-          Export dashboard data in various formats for offline analysis or reporting.
-        </p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="border rounded-lg p-4">
-            <h3 className="font-semibold mb-2">JIRA Story Points</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Export story point completion metrics per team and sprint.
-            </p>
-            <div className="flex gap-2">
-              <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                CSV
-              </button>
-              <button className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">
-                Excel
-              </button>
-              <button className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
-                PDF
-              </button>
-            </div>
-          </div>
-          
-          <div className="border rounded-lg p-4">
-            <h3 className="font-semibold mb-2">Git Metrics</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Export commit activity, PRs, and code reviews data.
-            </p>
-            <div className="flex gap-2">
-              <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                CSV
-              </button>
-              <button className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">
-                Excel
-              </button>
-              <button className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
-                PDF
-              </button>
-            </div>
-          </div>
-          
-          <div className="border rounded-lg p-4">
-            <h3 className="font-semibold mb-2">Team Performance</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Export combined team metrics and performance analysis.
-            </p>
-            <div className="flex gap-2">
-              <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                CSV
-              </button>
-              <button className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">
-                Excel
-              </button>
-              <button className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
-                PDF
-              </button>
-            </div>
-          </div>
-          
-          <div className="border rounded-lg p-4">
-            <h3 className="font-semibold mb-2">Member Metrics</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Export individual team member performance data.
-            </p>
-            <div className="flex gap-2">
-              <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                CSV
-              </button>
-              <button className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">
-                Excel
-              </button>
-              <button className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
-                PDF
-              </button>
-            </div>
-          </div>
-          
-          <div className="border rounded-lg p-4">
-            <h3 className="font-semibold mb-2">Sprint Reports</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Export detailed sprint performance reports.
-            </p>
-            <div className="flex gap-2">
-              <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                CSV
-              </button>
-              <button className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">
-                Excel
-              </button>
-              <button className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
-                PDF
-              </button>
-            </div>
-          </div>
-          
-          <div className="border rounded-lg p-4">
-            <h3 className="font-semibold mb-2">Full Dashboard</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Export all dashboard data in a single comprehensive report.
-            </p>
-            <div className="flex gap-2">
-              <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                CSV
-              </button>
-              <button className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">
-                Excel
-              </button>
-              <button className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
-                PDF
-              </button>
+              </form>
             </div>
           </div>
         </div>
       </div>
     </Layout>
   );
-};
-
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  // In a real application, you would fetch this data from your API
-  // For now, we'll use mock data
-  const mockJiraSettings = {
-    baseUrl: 'https://mycompany.atlassian.net',
-    username: 'admin@example.com',
-    apiTokenMasked: '••••••••••••••••',
-    isConnected: true
-  };
-  
-  const mockGitSettings = {
-    provider: 'github' as const,
-    organization: 'mycompany-org',
-    apiTokenMasked: '••••••••••••••••',
-    isConnected: true
-  };
-  
-  const mockDashboardSettings = {
-    defaultDateRange: 'month' as const,
-    refreshInterval: 15,
-    defaultTeam: 'all',
-    theme: 'light' as const,
-    showVelocityTrend: true,
-    enableEmailReports: false,
-    emailReportFrequency: 'weekly' as const,
-    emailRecipients: ['admin@example.com']
-  };
-
-  return {
-    props: {
-      jiraSettings: mockJiraSettings,
-      gitSettings: mockGitSettings,
-      dashboardSettings: mockDashboardSettings
-    }
-  };
-};
-
-export default SettingsPage;
+}
