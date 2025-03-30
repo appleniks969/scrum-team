@@ -26,13 +26,11 @@ export class JiraApiClient {
     this.storyPointsField = storyPointsField;
     
     // Create Axios instance with authentication
+    const auth = Buffer.from(`${username}:${apiToken}`).toString('base64');
     this.axiosInstance = axios.create({
       baseURL: baseUrl,
-      auth: {
-        username,
-        password: apiToken
-      },
       headers: {
+        'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       }
@@ -66,10 +64,28 @@ export class JiraApiClient {
     // Log error details
     console.error('JIRA API Error:', {
       status: error.response?.status,
+      statusText: error.response?.statusText,
       data: error.response?.data,
       url: error.config?.url,
-      method: error.config?.method
+      method: error.config?.method,
+      headers: {
+        // Log relevant request headers but mask Authorization header
+        ...Object.fromEntries(
+          Object.entries(error.config?.headers || {}).map(([key, value]) => 
+            key.toLowerCase() === 'authorization' 
+              ? [key, 'Basic ***********'] 
+              : [key, value]
+          )
+        )
+      }
     });
+    
+    // Specific handling for common errors
+    if (error.response?.status === 403) {
+      console.error('JIRA API 403 Forbidden: This is typically an authentication or permissions issue.');
+      console.error('Please check your JIRA credentials and ensure the user has appropriate permissions.');
+      console.error('JIRA response:', error.response?.data);
+    }
     
     // Rate limiting detection
     if (error.response?.status === 429) {
