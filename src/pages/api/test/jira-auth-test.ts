@@ -74,23 +74,23 @@ export default async function handler(
       } catch (error2) {
         console.error('Method 2 failed:', error2);
         
-        // Method 3: Using API token directly
-        try {
-          console.log('Trying method 3: Personal Access Token');
-          const response3 = await axios.get(`${jiraBaseUrl}/rest/api/2/myself`, {
-            headers: {
-              'Authorization': `Bearer ${jiraApiToken}`,
-              'Accept': 'application/json'
-            }
-          });
-          
-          return res.status(200).json({
-            success: true,
-            method: 'Bearer token',
-            user: response3.data
-          });
-        } catch (error3) {
-          console.error('Method 3 failed:', error3);
+    // Method 3: Using PAT directly as Bearer token
+    try {
+      console.log('Trying method 3: Personal Access Token with Bearer auth');
+      const response3 = await axios.get(`${jiraBaseUrl}/rest/api/2/myself`, {
+        headers: {
+          'Authorization': `Bearer ${jiraApiToken}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      return res.status(200).json({
+        success: true,
+        method: 'Bearer token',
+        user: response3.data
+      });
+    } catch (error3) {
+      console.error('Method 3 failed:', error3);
           
           // All methods failed
           return res.status(500).json({

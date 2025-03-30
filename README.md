@@ -62,7 +62,7 @@ The ScrumTeam Metrics Dashboard provides an integrated view of productivity metr
 
 To enable JIRA API integration, you need to:
 
-1. **Create a JIRA API Token**:
+1. **JIRA API Token Setup**:
    - Log in to your Atlassian account
    - Go to Account Settings → Security → Create and manage API tokens
    - Create a new API token and copy it

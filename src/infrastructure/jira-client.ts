@@ -25,7 +25,7 @@ export class JiraApiClient {
     this.baseUrl = baseUrl;
     this.storyPointsField = storyPointsField;
     
-    // Create Axios instance with authentication
+    // Create Axios instance with Basic Authentication
     const auth = Buffer.from(`${username}:${apiToken}`).toString('base64');
     this.axiosInstance = axios.create({
       baseURL: baseUrl,
