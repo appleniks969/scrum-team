@@ -56,7 +56,47 @@ The ScrumTeam Metrics Dashboard provides an integrated view of productivity metr
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### GitHub API Setup
+### API Setup
+
+#### JIRA API Setup
+
+To enable JIRA API integration, you need to:
+
+1. **Create a JIRA API Token**:
+   - Log in to your Atlassian account
+   - Go to Account Settings → Security → Create and manage API tokens
+   - Create a new API token and copy it
+
+2. **Identify your Story Points Field**:
+   - Different JIRA instances use different custom field IDs for story points
+   - By default, the dashboard looks for `customfield_10016`
+   - To find your story points field ID:
+     - Open a JIRA issue with story points in your browser
+     - Open the browser developer tools and go to the Network tab
+     - Find an API request to the issue (e.g., `/rest/api/3/issue/{issueKey}`)  
+     - Look in the response for a field like `customfield_XXXXX` that contains your story points value
+
+3. **Configure Environment Variables**:
+   - Add the following to your `.env.local` file:
+     ```
+     JIRA_BASE_URL=https://your-instance.atlassian.net
+     JIRA_USERNAME=your-email@example.com
+     JIRA_API_TOKEN=your-api-token
+     JIRA_STORY_POINTS_FIELD=customfield_10016
+     ```
+   - Set `USE_MOCK_DATA=false` to use the actual JIRA API
+
+4. **Test the Connection**:
+   - Start the development server
+   - Navigate to `/api/test/jira-connection` endpoint in your browser
+   - You should see a success message if the connection is working
+
+5. **Troubleshooting**:
+   - If you encounter rate limiting issues, consider increasing the cache TTL in the API endpoints
+   - Ensure your JIRA API token has the necessary permissions
+   - Check that the story points field ID is correct for your JIRA instance
+
+#### GitHub API Setup
 
 To enable GitHub API integration, you need to:
 

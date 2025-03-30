@@ -95,6 +95,11 @@ export interface TeamRepository {
   findByBoardId(boardId: number): Promise<Team | null>;
 }
 
+export interface TeamMemberRepository {
+  findByTeam(teamId: string): Promise<TeamMember[]>;
+  findById(accountId: string): Promise<TeamMember | null>;
+}
+
 export interface SprintRepository {
   findByTeam(teamId: string): Promise<Sprint[]>;
   findActive(teamId: string): Promise<Sprint[]>;

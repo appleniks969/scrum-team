@@ -1,259 +1,333 @@
-// JIRA API Client Implementation
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { 
   Team, 
   TeamMember, 
   Sprint, 
-  Issue, 
-  TeamRepository, 
-  SprintRepository, 
-  IssueRepository 
+  Issue,
+  CompletionStats 
 } from '../domain/jira/entities';
 
 export class JiraApiClient {
-  private baseUrl: string;
-  private client: AxiosInstance;
+  private axiosInstance: AxiosInstance;
+  private readonly baseUrl: string;
+  private readonly storyPointsField: string;
+  
+  // Cache mechanism
+  private cache: Map<string, { data: any, timestamp: number }> = new Map();
+  private readonly cacheExpiry: number = 5 * 60 * 1000; // 5 minutes
 
-  constructor(baseUrl: string, username: string, apiToken: string) {
+  constructor(
+    baseUrl: string, 
+    username: string, 
+    apiToken: string,
+    storyPointsField: string = 'customfield_10016'
+  ) {
     this.baseUrl = baseUrl;
+    this.storyPointsField = storyPointsField;
     
-    // Create authenticated Axios instance
-    this.client = axios.create({
+    // Create Axios instance with authentication
+    this.axiosInstance = axios.create({
       baseURL: baseUrl,
       auth: {
         username,
         password: apiToken
       },
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+    
+    // Add request/response interceptors
+    this.setupInterceptors();
+  }
+  
+  private setupInterceptors() {
+    // Request interceptor for logging
+    this.axiosInstance.interceptors.request.use(
+      config => {
+        console.debug(`JIRA API Request: ${config.method?.toUpperCase()} ${config.url}`);
+        return config;
+      },
+      error => {
+        console.error('JIRA API Request Error:', error);
+        return Promise.reject(error);
+      }
+    );
+    
+    // Response interceptor for error handling
+    this.axiosInstance.interceptors.response.use(
+      response => response,
+      error => this.handleApiError(error)
+    );
+  }
+  
+  private handleApiError(error: any) {
+    // Log error details
+    console.error('JIRA API Error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      url: error.config?.url,
+      method: error.config?.method
+    });
+    
+    // Rate limiting detection
+    if (error.response?.status === 429) {
+      console.warn('JIRA API rate limit exceeded');
+      // Could implement retry logic here
+    }
+    
+    // Enhance error with better context
+    const enhancedError = new Error(
+      error.response?.data?.errorMessages?.join(', ') || 
+      error.response?.data?.message || 
+      error.message || 
+      'Unknown JIRA API error'
+    );
+    
+    // Add additional error properties
+    Object.assign(enhancedError, {
+      statusCode: error.response?.status,
+      originalError: error,
+      endpoint: error.config?.url,
+      method: error.config?.method
+    });
+    
+    return Promise.reject(enhancedError);
+  }
+  
+  // Cache helper methods
+  private getCacheKey(endpoint: string, params?: any): string {
+    return `${endpoint}:${JSON.stringify(params || {})}`;
+  }
+  
+  private getCachedData<T>(key: string): T | null {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+      console.debug(`Cache hit for: ${key}`);
+      return cached.data as T;
+    }
+    return null;
+  }
+  
+  private setCacheData(key: string, data: any): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now()
+    });
+  }
+  
+  // Generic method for making API calls with caching
+  private async apiCall<T>(
+    endpoint: string, 
+    config?: AxiosRequestConfig, 
+    skipCache: boolean = false
+  ): Promise<T> {
+    const cacheKey = this.getCacheKey(endpoint, config?.params);
+    
+    // Check cache first if not explicitly skipped
+    if (!skipCache) {
+      const cachedData = this.getCachedData<T>(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+    }
+    
+    try {
+      const response = await this.axiosInstance.get<T>(endpoint, config);
+      
+      // Cache successful responses
+      this.setCacheData(cacheKey, response.data);
+      
+      return response.data;
+    } catch (error) {
+      // For some errors, we might want to return stale data if available
+      if (axios.isAxiosError(error) && error.response?.status >= 500) {
+        const cachedData = this.getCachedData<T>(cacheKey);
+        if (cachedData) {
+          console.warn(`Using stale cached data for ${endpoint} due to server error`);
+          return cachedData;
+        }
+      }
+      throw error;
+    }
+  }
+  
+  // API Methods for JIRA Resources
+  
+  // Boards (Teams)
+  async getBoards(startAt: number = 0, maxResults: number = 50): Promise<any> {
+    return this.apiCall<any>('/rest/agile/1.0/board', {
+      params: { startAt, maxResults }
+    });
+  }
+  
+  async getBoardById(boardId: number): Promise<any> {
+    return this.apiCall<any>(`/rest/agile/1.0/board/${boardId}`);
+  }
+  
+  // Sprints
+  async getBoardSprints(
+    boardId: number, 
+    state?: string,
+    startAt: number = 0, 
+    maxResults: number = 50
+  ): Promise<any> {
+    return this.apiCall<any>(`/rest/agile/1.0/board/${boardId}/sprint`, {
+      params: { state, startAt, maxResults }
+    });
+  }
+  
+  async getSprintById(sprintId: number): Promise<any> {
+    return this.apiCall<any>(`/rest/agile/1.0/sprint/${sprintId}`);
+  }
+  
+  // Issues
+  async getIssuesByJQL(
+    jql: string,
+    fields: string[] = ['summary', 'status', 'assignee'],
+    startAt: number = 0,
+    maxResults: number = 100
+  ): Promise<any> {
+    // Always include the story points field
+    if (!fields.includes(this.storyPointsField)) {
+      fields.push(this.storyPointsField);
+    }
+    
+    return this.apiCall<any>('/rest/api/3/search', {
+      params: { jql, fields: fields.join(','), startAt, maxResults }
+    });
+  }
+  
+  async getSprintIssues(sprintId: number): Promise<any> {
+    const jql = `sprint=${sprintId}`;
+    return this.getIssuesByJQL(jql);
+  }
+  
+  async getBoardIssues(
+    boardId: number, 
+    startAt: number = 0, 
+    maxResults: number = 100
+  ): Promise<any> {
+    return this.apiCall<any>(`/rest/agile/1.0/board/${boardId}/issue`, {
+      params: {
+        fields: `summary,status,assignee,${this.storyPointsField}`,
+        startAt,
+        maxResults
       }
     });
   }
-
-  // Fetch all boards (representing teams)
-  async getBoards(): Promise<any[]> {
-    try {
-      const response = await this.client.get('/rest/agile/1.0/board');
-      return response.data.values || [];
-    } catch (error) {
-      console.error('Error fetching boards:', error);
-      return [];
-    }
-  }
-
-  // Fetch sprints for a board
-  async getSprints(boardId: number): Promise<any[]> {
-    try {
-      const response = await this.client.get(`/rest/agile/1.0/board/${boardId}/sprint`, {
-        params: {
-          state: 'active,closed'
-        }
-      });
-      return response.data.values || [];
-    } catch (error) {
-      console.error(`Error fetching sprints for board ${boardId}:`, error);
-      return [];
-    }
-  }
-
-  // Fetch issues for a sprint
-  async getIssuesForSprint(sprintId: number): Promise<any[]> {
-    try {
-      const jql = `sprint=${sprintId}`;
-      const response = await this.client.get('/rest/api/2/search', {
-        params: {
-          jql,
-          fields: 'summary,status,assignee,customfield_10006,resolutiondate',
-          maxResults: 1000
-        }
-      });
-      return response.data.issues || [];
-    } catch (error) {
-      console.error(`Error fetching issues for sprint ${sprintId}:`, error);
-      return [];
-    }
-  }
-
-  // Fetch issues for a team within a date range
-  async getIssuesForTeam(
-    projectKey: string, 
+  
+  async getIssuesByTeamAndTimeframe(
+    boardId: number, 
     startDate?: string, 
     endDate?: string
-  ): Promise<any[]> {
-    try {
-      let jql = `project=${projectKey}`;
+  ): Promise<any> {
+    let jql = `board=${boardId}`;
+    
+    if (startDate) {
+      jql += ` AND updated >= "${startDate}"`;
+    }
+    
+    if (endDate) {
+      jql += ` AND updated <= "${endDate}"`;
+    }
+    
+    return this.getIssuesByJQL(jql);
+  }
+  
+  // Users
+  async getUsers(startAt: number = 0, maxResults: number = 50): Promise<any> {
+    return this.apiCall<any>('/rest/api/3/users', {
+      params: { startAt, maxResults }
+    });
+  }
+  
+  async getUserById(accountId: string): Promise<any> {
+    return this.apiCall<any>(`/rest/api/3/user`, {
+      params: { accountId }
+    });
+  }
+  
+  // Get issues assigned to a specific user
+  async getIssuesByAssignee(
+    accountId: string, 
+    startDate?: string, 
+    endDate?: string
+  ): Promise<any> {
+    let jql = `assignee = "${accountId}"`;
+    
+    if (startDate) {
+      jql += ` AND updated >= "${startDate}"`;
+    }
+    
+    if (endDate) {
+      jql += ` AND updated <= "${endDate}"`;
+    }
+    
+    return this.getIssuesByJQL(jql);
+  }
+  
+  // Helper methods for pagination
+  async getAllResults<T>(
+    fetchMethod: (startAt: number, maxResults: number) => Promise<any>,
+    resultKey: string,
+    maxTotal: number = 1000
+  ): Promise<T[]> {
+    let allResults: T[] = [];
+    let startAt = 0;
+    const maxResults = 50;
+    let total = maxTotal;
+    
+    do {
+      const response = await fetchMethod(startAt, maxResults);
       
-      if (startDate && endDate) {
-        jql += ` AND updated >= '${startDate}' AND updated <= '${endDate}'`;
+      // Update total if it's provided in the response
+      if (response.total !== undefined) {
+        total = response.total;
       }
       
-      const response = await this.client.get('/rest/api/2/search', {
-        params: {
-          jql,
-          fields: 'summary,status,assignee,customfield_10006,resolutiondate',
-          maxResults: 1000
-        }
-      });
-      return response.data.issues || [];
-    } catch (error) {
-      console.error(`Error fetching issues for project ${projectKey}:`, error);
-      return [];
-    }
-  }
-
-  // Fetch team members
-  async getTeamMembers(projectKey: string): Promise<any[]> {
-    try {
-      const response = await this.client.get('/rest/api/2/user/assignable/search', {
-        params: {
-          project: projectKey
-        }
-      });
-      return response.data || [];
-    } catch (error) {
-      console.error(`Error fetching team members for project ${projectKey}:`, error);
-      return [];
-    }
-  }
-}
-
-// Repository implementations
-export class JiraTeamRepository implements TeamRepository {
-  private jiraClient: JiraApiClient;
-  private teamMappings: Record<number, string>; // Maps board IDs to team IDs
-
-  constructor(jiraClient: JiraApiClient, teamMappings: Record<number, string> = {}) {
-    this.jiraClient = jiraClient;
-    this.teamMappings = teamMappings;
-  }
-
-  async findAll(): Promise<Team[]> {
-    const boards = await this.jiraClient.getBoards();
-    
-    return boards.map(board => ({
-      id: this.teamMappings[board.id] || board.id.toString(),
-      name: board.name,
-      boardId: board.id
-    }));
-  }
-
-  async findById(id: string): Promise<Team | null> {
-    const teams = await this.findAll();
-    return teams.find(team => team.id === id) || null;
-  }
-
-  async findByBoardId(boardId: number): Promise<Team | null> {
-    const teams = await this.findAll();
-    return teams.find(team => team.boardId === boardId) || null;
-  }
-}
-
-export class JiraSprintRepository implements SprintRepository {
-  private jiraClient: JiraApiClient;
-  private teamRepository: JiraTeamRepository;
-
-  constructor(jiraClient: JiraApiClient, teamRepository: JiraTeamRepository) {
-    this.jiraClient = jiraClient;
-    this.teamRepository = teamRepository;
-  }
-
-  async findByTeam(teamId: string): Promise<Sprint[]> {
-    const team = await this.teamRepository.findById(teamId);
-    if (!team) {
-      return [];
-    }
-
-    const sprints = await this.jiraClient.getSprints(team.boardId);
-    
-    return sprints.map(sprint => ({
-      id: sprint.id,
-      name: sprint.name,
-      state: sprint.state,
-      startDate: sprint.startDate,
-      endDate: sprint.endDate,
-      boardId: team.boardId
-    }));
-  }
-
-  async findActive(teamId: string): Promise<Sprint[]> {
-    const sprints = await this.findByTeam(teamId);
-    return sprints.filter(sprint => sprint.state === 'active');
-  }
-
-  async findById(id: number): Promise<Sprint | null> {
-    // This is inefficient in a real implementation
-    // We would use a direct API call to get the sprint
-    const teams = await this.teamRepository.findAll();
-    
-    for (const team of teams) {
-      const sprints = await this.findByTeam(team.id);
-      const sprint = sprints.find(s => s.id === id);
-      if (sprint) {
-        return sprint;
+      // Add results to the array
+      const results = response[resultKey] || [];
+      allResults = [...allResults, ...results];
+      
+      // Update startAt for next page
+      startAt += maxResults;
+      
+      // Continue until we've fetched all results or hit the max
+      if (startAt >= total || allResults.length >= maxTotal) {
+        break;
       }
-    }
+    } while (true);
     
-    return null;
+    return allResults;
   }
-}
-
-export class JiraIssueRepository implements IssueRepository {
-  private jiraClient: JiraApiClient;
-  private teamRepository: JiraTeamRepository;
-  private projectMapping: Record<string, string>; // Maps team IDs to project keys
-
-  constructor(
-    jiraClient: JiraApiClient, 
-    teamRepository: JiraTeamRepository,
-    projectMapping: Record<string, string> = {}
-  ) {
-    this.jiraClient = jiraClient;
-    this.teamRepository = teamRepository;
-    this.projectMapping = projectMapping;
+  
+  // Get all boards with pagination handling
+  async getAllBoards(maxTotal: number = 100): Promise<any[]> {
+    return this.getAllResults<any>(
+      (startAt, maxResults) => this.getBoards(startAt, maxResults),
+      'values',
+      maxTotal
+    );
   }
-
-  async findBySprint(sprintId: number): Promise<Issue[]> {
-    const issues = await this.jiraClient.getIssuesForSprint(sprintId);
-    
-    return issues.map(issue => this.mapJiraIssueToEntity(issue));
+  
+  // Get all sprints for a board with pagination handling
+  async getAllBoardSprints(boardId: number, state?: string): Promise<any[]> {
+    return this.getAllResults<any>(
+      (startAt, maxResults) => this.getBoardSprints(boardId, state, startAt, maxResults),
+      'values'
+    );
   }
-
-  async findByTeam(teamId: string, startDate?: string, endDate?: string): Promise<Issue[]> {
-    const projectKey = this.projectMapping[teamId];
-    if (!projectKey) {
-      throw new Error(`No project key mapping found for team ${teamId}`);
-    }
-    
-    const issues = await this.jiraClient.getIssuesForTeam(projectKey, startDate, endDate);
-    
-    return issues.map(issue => this.mapJiraIssueToEntity(issue, teamId));
+  
+  // Clear cache for testing or when data might be stale
+  clearCache(): void {
+    this.cache.clear();
+    console.debug('JIRA API cache cleared');
   }
-
-  async findByAssignee(accountId: string, startDate?: string, endDate?: string): Promise<Issue[]> {
-    // In a real implementation, we would make a specific API call
-    // For now, we'll aggregate issues from all teams and filter by assignee
-    const teams = await this.teamRepository.findAll();
-    const allIssues: Issue[] = [];
-    
-    for (const team of teams) {
-      const issues = await this.findByTeam(team.id, startDate, endDate);
-      allIssues.push(...issues);
-    }
-    
-    return allIssues.filter(issue => issue.assignee === accountId);
-  }
-
-  private mapJiraIssueToEntity(jiraIssue: any, teamId?: string): Issue {
-    return {
-      id: jiraIssue.id,
-      key: jiraIssue.key,
-      summary: jiraIssue.fields.summary,
-      storyPoints: jiraIssue.fields.customfield_10006, // Adjust field ID as needed
-      status: jiraIssue.fields.status.name,
-      assignee: jiraIssue.fields.assignee?.accountId,
-      teamId: teamId || 'unknown', // In a real implementation, we would determine this
-      sprintId: jiraIssue.fields.sprint?.id,
-      resolvedDate: jiraIssue.fields.resolutiondate
-    };
+  
+  // Get the story points field being used
+  getStoryPointsField(): string {
+    return this.storyPointsField;
   }
 }
