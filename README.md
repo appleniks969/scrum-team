@@ -73,7 +73,7 @@ To enable JIRA API integration, you need to:
    - To find your story points field ID:
      - Open a JIRA issue with story points in your browser
      - Open the browser developer tools and go to the Network tab
-     - Find an API request to the issue (e.g., `/rest/api/3/issue/{issueKey}`)  
+     - Find an API request to the issue (e.g., `/rest/api/2/issue/{issueKey}`)  
      - Look in the response for a field like `customfield_XXXXX` that contains your story points value
 
 3. **Configure Environment Variables**:

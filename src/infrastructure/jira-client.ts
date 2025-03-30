@@ -194,7 +194,7 @@ export class JiraApiClient {
       fields.push(this.storyPointsField);
     }
     
-    return this.apiCall<any>('/rest/api/3/search', {
+    return this.apiCall<any>('/rest/api/2/search', {
       params: { jql, fields: fields.join(','), startAt, maxResults }
     });
   }
@@ -238,13 +238,13 @@ export class JiraApiClient {
   
   // Users
   async getUsers(startAt: number = 0, maxResults: number = 50): Promise<any> {
-    return this.apiCall<any>('/rest/api/3/users', {
+    return this.apiCall<any>('/rest/api/2/users', {
       params: { startAt, maxResults }
     });
   }
   
   async getUserById(accountId: string): Promise<any> {
-    return this.apiCall<any>(`/rest/api/3/user`, {
+    return this.apiCall<any>(`/rest/api/2/user`, {
       params: { accountId }
     });
   }
